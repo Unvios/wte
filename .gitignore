@@ -1,0 +1,8 @@
+/*
+
+!/.gitignore
+
+!/mods/
+/mods/*
+
+!/mods/WTE_QOL_Init/
