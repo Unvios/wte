@@ -1,11 +1,13 @@
 /*
 
 !/.gitignore
+!/AGENTS.md
 
 !/mods/
 /mods/*
+!/mods/WTE_QOL_*/
+/mods/!*/
 
 !/docs/
 
-!/mods/WTE_QOL_Init/
-!/mods/WTE_QOL_Coffee_Duration/
+!/tools/
