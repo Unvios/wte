@@ -1,0 +1,7 @@
+{
+  "name": "WTE QOL Coffee Duration",
+  "author": "Unvios",
+  "version": "1.0.0",
+  "description": "Extends the Cup of Coffee speed buff from 4 to 8 in-game hours. Item and message text is updated at display time in every shipped language; disabling the mod fully reverts the game.",
+  "priority": 10
+}
