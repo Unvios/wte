@@ -47,9 +47,10 @@
         SHRINE_REWARD_TEXT: 'The combat shrine rewards you...', // combat shrine bonus loot announcement
         SHRINE_FRAME_COLOR: 0xFFD700,               // gold tint for the windowskin frame of bonus loot toasts
         SUMMARY_SEPARATOR: '  ',                    // between EXP and gold parts of the summary toast
-        TOAST_DISPLAY_TIME: 240,                    // frames (4 s) per loot toast
+        TOAST_DISPLAY_TIME: 180,                    // frames (3 s) per loot toast
         TOAST_WIDTH: 380,
         RIGHT_MARGIN: 8,
+        MAX_TOAST_SLOTS: 7,                         // CGMZ toast slots; the game default is 3
         DEBUG: false,
         DEBUG_FORCE_SHRINE: false,                 // test helper: mark every drop as shrine loot
         LOG_FILE: 'loot_toasts_debug.log',          // console is unavailable in this build; DEBUG writes here
@@ -183,6 +184,32 @@
     let pendingExp = null;
     let rollFace = 0; // last die roll (1-6), consumed by the summary toast at flush
 
+    function purgeLootToasts() {
+        // A new battle's loot replaces the previous one: drop queued loot
+        // toasts and instantly close the ones on screen (same force-kill the
+        // game's duplicate-clear patch uses). Other toasts are untouched.
+        if (typeof $cgmzTemp !== 'undefined' && $cgmzTemp && $cgmzTemp._toastWindows) {
+            $cgmzTemp._toastWindows = $cgmzTemp._toastWindows
+                .filter(toast => !(toast && toast._wteLootToast));
+        }
+        const scene = SceneManager._scene;
+        if (scene && scene._cgmz_hasToastWindows) {
+            const wins = [scene._cgmz_toastWindow1, scene._cgmz_toastWindow2, scene._cgmz_toastWindow3];
+            for (const win of wins) {
+                if (win && win.isDisplaying() && win._wteActiveToast && win._wteActiveToast._wteLootToast) {
+                    win._showCount = 0;
+                    win.opacity = 0;
+                    win.contentsOpacity = 0;
+                    if (win._dimmerSprite) win._dimmerSprite.opacity = 0;
+                    win.y = 0;
+                    win.height = 0;
+                    win._isDisplaying = false;
+                    win._wteActiveToast = null;
+                }
+            }
+        }
+    }
+
     function bufferLootToast(kind, text, amount) {
         lootBatch.push({ kind: kind, text: text, shrine: shrineLootActive, amount: amount });
     }
@@ -202,6 +229,7 @@
         const face = rollFace;
         rollFace = 0;
         if (!lootBatch.length && expAmount === null && !face) return;
+        purgeLootToasts();
         const batch = lootBatch;
         lootBatch = [];
         let goldTotal = 0;
@@ -394,6 +422,55 @@
         if (shouldSkipPicture(params)) return true;
         return alias_Game_Interpreter_command235.call(this, params);
     };
+
+    // ==========================================================================
+    // Toast display order. Toast_Localization_Fix's "queue accelerator" force-
+    // fades the oldest toast whenever the queue is non-empty and all 3 slots
+    // are taken; the newest toast then takes the freed FIRST slot (bottom),
+    // which scrambles the stack (the summary must stay on top). For queues
+    // fronted by a loot toast we run the vanilla CGMZ pacing instead: queued
+    // toasts simply wait for a naturally freed slot. Game-owned toasts keep
+    // the accelerator.
+    // ==========================================================================
+
+    if (typeof Scene_Base !== 'undefined' && Scene_Base.prototype.CGMZ_ToastManager_updateToastWindows) {
+        // Read at scene creation, which happens after mods load — so bumping the
+        // slot count here gives every scene more toast windows.
+        if (CONFIG.MAX_TOAST_SLOTS > 3 && typeof CGMZ !== 'undefined' && CGMZ.ToastManager) {
+            CGMZ.ToastManager.MaxWindowCount = CONFIG.MAX_TOAST_SLOTS;
+        }
+        const alias_Scene_Base_CGMZ_ToastManager_updateToastWindows = Scene_Base.prototype.CGMZ_ToastManager_updateToastWindows;
+        Scene_Base.prototype.CGMZ_ToastManager_updateToastWindows = function () {
+            const frontIsLoot = typeof $cgmzTemp !== 'undefined' && $cgmzTemp &&
+                $cgmzTemp.hasToast() && !!$cgmzTemp.peekToast()._wteLootToast;
+            if (!frontIsLoot || !this._cgmz_hasToastWindows) {
+                alias_Scene_Base_CGMZ_ToastManager_updateToastWindows.call(this);
+                return;
+            }
+            // Vanilla CGMZ_ToastManager.js pacing (v1.5.0): one toast per free
+            // slot per frame, no forced fade-out, generalized over however many
+            // toast windows the scene has.
+            const wins = [];
+            for (let i = 1; i <= CGMZ.ToastManager.MaxWindowCount; i++) {
+                const win = this['_cgmz_toastWindow' + i];
+                if (win) wins.push(win);
+            }
+            for (let i = 0; i < wins.length; i++) {
+                const win = wins[i];
+                if (win.isDisplaying()) continue;
+                if (i > 0 && !this.CGMZ_ToastManager_canDisplayToast(i + 1, $cgmzTemp.peekToast())) continue;
+                if (i === 0) {
+                    win.y = CGMZ.ToastManager.DisplayFromBottom ? Graphics.boxHeight : 0;
+                } else if (CGMZ.ToastManager.DisplayFromBottom) {
+                    win.y = wins[i - 1].y - CGMZ.ToastManager.Spacing;
+                } else {
+                    win.y = wins[i - 1].y + wins[i - 1].height + CGMZ.ToastManager.Spacing;
+                }
+                win.open($cgmzTemp.getToast());
+                break;
+            }
+        };
+    }
 
     // ==========================================================================
     // Toast window: right-side placement for loot toasts; combat shrine bonus
