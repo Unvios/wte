@@ -12,16 +12,13 @@
  * This plugin converts that event chain into CGMZ toasts (right side of the
  * screen, stacked upward from the bottom like the game's own toasts,
  * auto-fade), so control returns immediately after the roll. What you see:
- *   - die roll:     a free-floating popup at the bottom center of the screen
- *                   with just the die face picture (outside the 3-slot CGMZ
- *                   queue, so it can never be pushed out by a long loot list);
  *   - item drops:   icon + localized item name (+ xN when more than one);
- *   - gold:         coin icon + amount;
- *   - combat shrine bonus loot: same toasts, prefixed with a Combat Offering
- *                   icon (the "The combat shrine rewards you..." wording is
- *                   dropped entirely).
- * The "Victory!" window is skipped too; the earned EXP shows up as one last
- * toast ("N EXP" in the game's own terms) after the loot toasts.
+ *   - summary toast on top of the stack: the rolled die face picture (official
+ *                   d1-d6 art), earned EXP and gold in one line, e.g.
+ *                   "[d5]  16 EXP  [coin]34" (missing parts are omitted);
+ *   - combat shrine bonus loot: same item toasts with a gold frame (the "The
+ *                   combat shrine rewards you..." wording is dropped entirely).
+ * The "Victory!" window is skipped too.
  * The "Obtained …" wording is dropped in every language — the strings are
  * rebuilt from the game data instead of being reworded, so localization comes
  * from the item database for free. The corpse state texts, the battle start
@@ -46,16 +43,13 @@
             'The corpse was too mangled to search for loot...',
         ],
         REMOVE_BATTLE_START_MESSAGES: true,         // skip troop "A Rat appears!" announcements
-        VICTORY_EXP_TOAST: true,                    // skip "Victory!" window; show earned EXP as a toast
+        VICTORY_EXP_TOAST: true,                    // skip "Victory!" window; EXP goes into the summary toast
         SHRINE_REWARD_TEXT: 'The combat shrine rewards you...', // combat shrine bonus loot announcement
-        SHRINE_MARKER_ICON: 2311,                   // Combat Offering icon: prefixes bonus loot toasts
+        SHRINE_FRAME_COLOR: 0xFFD700,               // gold tint for the windowskin frame of bonus loot toasts
+        SUMMARY_SEPARATOR: '  ',                    // between EXP and gold parts of the summary toast
         TOAST_DISPLAY_TIME: 240,                    // frames (4 s) per loot toast
         TOAST_WIDTH: 380,
         RIGHT_MARGIN: 8,
-        SHOW_DIE_POPUP: true,
-        DIE_POPUP_SIZE: 72,                         // px; source art is 100x100
-        DIE_POPUP_DURATION: 180,                    // frames (3 s) after fade-in
-        DIE_POPUP_Y: 0,                             // offset up from the bottom; 0 = flush with the loot toasts
         DEBUG: false,
         DEBUG_FORCE_SHRINE: false,                 // test helper: mark every drop as shrine loot
         LOG_FILE: 'loot_toasts_debug.log',          // console is unavailable in this build; DEBUG writes here
@@ -139,57 +133,6 @@
     }
 
     // ==========================================================================
-    // Die roll popup: a free-floating sprite at the top center of the screen —
-    // the same spot and transparent look as the game's own free toasts, but
-    // drawn outside the 3-slot CGMZ queue, so a long loot list can never push
-    // it out. Official d1-d6 art, loaded through the same ImageManager the
-    // event commands use.
-    // ==========================================================================
-
-    class DiePopup extends Sprite {
-        constructor(face) {
-            super(ImageManager.loadPicture('d' + face));
-            this.anchor.x = 0.5;
-            this.anchor.y = 0.5;
-            this.x = (Graphics.width - Graphics.boxWidth) / 2 + Graphics.boxWidth / 2;
-            this.y = (Graphics.height - Graphics.boxHeight) / 2 + Graphics.boxHeight
-                - CONFIG.DIE_POPUP_Y - CONFIG.DIE_POPUP_SIZE / 2;
-            this.opacity = 0;
-            this._hold = CONFIG.DIE_POPUP_DURATION;
-            this._dying = false;
-            this._applyScale();
-            if (this.bitmap && !this.bitmap.isReady()) {
-                this.bitmap.addLoadListener(() => this._applyScale());
-            }
-        }
-        _applyScale() {
-            if (!this.bitmap || !this.bitmap.width) return;
-            const s = CONFIG.DIE_POPUP_SIZE / this.bitmap.width;
-            this.scale.x = s;
-            this.scale.y = s;
-        }
-        update() {
-            super.update();
-            if (this._dying) {
-                this.opacity = Math.max(0, this.opacity - 16);
-                if (this.opacity === 0 && this.parent) this.parent.removeChild(this);
-                return;
-            }
-            if (this.opacity < 255) this.opacity = Math.min(255, this.opacity + 16);
-            else if (this._hold > 0) this._hold--;
-            else this._dying = true;
-        }
-    }
-
-    function spawnDiePopup(face) {
-        if (!CONFIG.SHOW_DIE_POPUP || face < 1) return;
-        const scene = SceneManager._scene;
-        if (!scene || typeof scene.addChild !== 'function') return;
-        scene.addChild(new DiePopup(face));
-        log('die popup:', face);
-    }
-
-    // ==========================================================================
     // Loot toasts. Toast windows are fixed at one text line by the game config,
     // so multi-line messages are joined. CGMZ toasts draw lineOne through the
     // full escape-code pipeline, and Toast_Localization_Fix snapshots \V
@@ -197,8 +140,11 @@
     // long before the toast gets drawn).
     // ==========================================================================
 
-    function enqueueLootToast(text) {
-        if (typeof $cgmzTemp === 'undefined' || !$cgmzTemp) return false;
+    function enqueueLootToast(text, shrine, face) {
+        if (typeof $cgmzTemp === 'undefined' || !$cgmzTemp) {
+            log('toast dropped, CGMZ toasts unavailable:', text);
+            return false;
+        }
         $cgmzTemp.createNewToast({
             isText: true,
             lineOne: text,
@@ -208,22 +154,38 @@
             displayTime: CONFIG.TOAST_DISPLAY_TIME,
             width: CONFIG.TOAST_WIDTH,
             _wteLootToast: true, // our marker: right-side placement
+            _wteShrine: !!shrine, // gold tint for the windowskin frame
+            _wteSummaryFace: face || 0, // die face drawn from the d1-d6 pictures
         });
         log('toast:', text);
         return true;
     }
 
     // ==========================================================================
-    // Drop tracking: special drops are given via Change Item/Weapon/Armor
-    // (126/127/128) right before their "Obtained …" message. Remember the last
-    // one so the message can be rebuilt as icon + name with no wrapper text.
-    // Combat shrine bonus loot is flagged when the shrine announcement fires
-    // and marked with an icon until the loot flow ends.
+    // Loot batch: the whole CE 27 chain runs within a few frames, so instead of
+    // streaming toasts we buffer every entry, then flush them in one sorted go
+    // when the flow ends. The rolled die face, earned EXP and gold merge into a
+    // single summary toast on top of the stack. Combat shrine bonus loot is
+    // flagged while the shrine announcement is active and gets a gold frame
+    // tint on the toast window.
     // ==========================================================================
 
+    // Display order for the flush. The stack grows bottom-up, so enqueue
+    // shrine items first to read top-down as:
+    // summary (die face + EXP + gold) -> plain items -> shrine items.
+    const KIND_ORDER = { plain: 1, item: 1 };
+    const batchOrder = (entry) =>
+        entry.kind === 'item' && entry.shrine ? 0 : KIND_ORDER[entry.kind];
+
+    let lootBatch = [];
     let lastDrop = null;
     let shrineLootActive = false;
     let pendingExp = null;
+    let rollFace = 0; // last die roll (1-6), consumed by the summary toast at flush
+
+    function bufferLootToast(kind, text, amount) {
+        lootBatch.push({ kind: kind, text: text, shrine: shrineLootActive, amount: amount });
+    }
 
     const alias_Game_Map_update = Game_Map.prototype.update;
     Game_Map.prototype.update = function (sceneActive) {
@@ -232,19 +194,40 @@
         if (CONFIG.DEBUG_FORCE_SHRINE && inFlow) shrineLootActive = true;
         if (inFlow) return;
         shrineLootActive = false;
-        // Battle just ended (or had no loot flow): flush the held-back EXP toast.
-        if (pendingExp !== null) {
-            const exp = pendingExp;
-            pendingExp = null;
-            enqueueLootToast(`\\c[6]${exp} ${TextManager.exp}\\c[0]`);
+        // Battle just ended (or had no loot flow): flush the batch. Items go
+        // first (shrine items at the very bottom of the bottom-up stack); the
+        // die face, earned EXP and gold merge into one summary toast on top.
+        const expAmount = pendingExp;
+        pendingExp = null;
+        const face = rollFace;
+        rollFace = 0;
+        if (!lootBatch.length && expAmount === null && !face) return;
+        const batch = lootBatch;
+        lootBatch = [];
+        let goldTotal = 0;
+        const items = [];
+        for (const entry of batch) {
+            if (entry.kind === 'gold') {
+                goldTotal += entry.amount || 0;
+                continue;
+            }
+            items.push(entry);
+        }
+        items.sort((a, b) => batchOrder(a) - batchOrder(b));
+        for (const entry of items) enqueueLootToast(entry.text, entry.shrine);
+        if (face > 0 || expAmount !== null || goldTotal > 0) {
+            const parts = [];
+            if (expAmount !== null && expAmount > 0) parts.push(`${expAmount} ${TextManager.exp}`);
+            if (goldTotal > 0) parts.push(`\\i[314]\\c[14]${goldTotal}\\c[0]`);
+            enqueueLootToast(parts.join(CONFIG.SUMMARY_SEPARATOR), false, face);
         }
     };
 
     // ==========================================================================
     // Victory flow (MZ core, not events): "Victory!" and "Obtained: N EXP!" are
-    // message windows shown in the battle scene. Skip them; remember the EXP and
-    // toast it on the map after the loot flow, so it lands on top of the stack
-    // and nothing pushes it out. TextManager.exp keeps the word localized.
+    // message windows shown in the battle scene. Skip them; the earned EXP is
+    // remembered and merged into the summary toast at flush. TextManager.exp
+    // keeps the word localized.
     // ==========================================================================
 
     if (typeof BattleManager === 'object' || typeof BattleManager === 'function') {
@@ -285,11 +268,14 @@
             const id = $gameVariables.value(30);
             const count = $gameVariables.value(31);
             if (!id) return null;
-            return `\\c[6]\\ii[${id}]\\c[0]` + (count > 1 ? ` x${count}` : '');
+            return {
+                kind: 'item',
+                text: `\\c[6]\\ii[${id}]\\c[0]` + (count > 1 ? ` x${count}` : ''),
+            };
         }
         if (raw === RAW_GOLD) {
             // CE 599 "Give Gold": amount in var 1039, coin icon 314.
-            return `\\i[314]\\c[14]${$gameVariables.value(1039)}\\c[0]`;
+            return { kind: 'gold', text: '', amount: $gameVariables.value(1039) };
         }
         if (raw.indexOf('Obtained ') === 0) {
             // Special drop announced right after a 126/127/128 in this flow.
@@ -300,20 +286,23 @@
                 : drop ? $dataArmors : null;
             const data = db && db[drop.id];
             if (data) {
-                if (drop.code === 126) return `\\c[14]\\ii[${drop.id}]\\c[0]`;
-                return `\\i[${data.iconIndex}]\\c[14]${localize(data.name)}\\c[0]`;
+                if (drop.code === 126) return { kind: 'item', text: `\\c[14]\\ii[${drop.id}]\\c[0]` };
+                return {
+                    kind: 'item',
+                    text: `\\i[${data.iconIndex}]\\c[14]${localize(data.name)}\\c[0]`,
+                };
             }
-            return raw.slice('Obtained '.length);
+            return { kind: 'item', text: raw.slice('Obtained '.length) };
         }
         return null;
     }
 
     // ==========================================================================
-    // Interception: messages inside the loot flow become toasts; battle start
-    // announcements are skipped. Vanilla command101 fills $gameMessage and sets
-    // the "message" wait mode, which blocks the player until the window is
-    // clicked through. Here the 401 lines are consumed and the interpreter
-    // simply continues.
+    // Interception: messages inside the loot flow are buffered as batch
+    // entries; battle start announcements are skipped. Vanilla command101 fills
+    // $gameMessage and sets the "message" wait mode, which blocks the player
+    // until the window is clicked through. Here the 401 lines are consumed and
+    // the interpreter simply continues.
     // ==========================================================================
 
     const alias_Game_Interpreter_command101 = Game_Interpreter.prototype.command101;
@@ -339,8 +328,9 @@
         const lines = collectTextLines(this);
         const text = lines.join(' ').trim();
         if (!text) {
-            // The die face CEs use an empty message as a blocking pause.
-            spawnDiePopup(diceFaceOfList(this._list));
+            // The die face CEs use an empty message as a blocking pause; the
+            // face value goes into the summary toast.
+            rollFace = diceFaceOfList(this._list);
             return true;
         }
         if (CONFIG.SUPPRESSED_TEXTS.indexOf(text) !== -1) return true;
@@ -358,14 +348,9 @@
         }
 
         const rebuilt = dropToastText(text);
-        let toastText = rebuilt !== null ? rebuilt : text;
-        if (rebuilt !== null && shrineLootActive) {
-            toastText = `\\i[${CONFIG.SHRINE_MARKER_ICON}] ` + toastText;
-        }
-        if (!enqueueLootToast(toastText)) {
-            // CGMZ toasts unavailable — degrade to a vanilla message window.
-            return showVanillaMessage(this, params, lines);
-        }
+        bufferLootToast(rebuilt !== null ? rebuilt.kind : 'plain',
+            rebuilt !== null ? rebuilt.text : text,
+            rebuilt !== null ? rebuilt.amount : undefined);
         return true;
     };
 
@@ -411,17 +396,52 @@
     };
 
     // ==========================================================================
-    // Toast window: right-side placement for loot toasts. Vertical stacking
-    // stays vanilla: bottom-up, so the first drop lands at the bottom.
+    // Toast window: right-side placement for loot toasts; combat shrine bonus
+    // loot keeps the original windowskin frame, tinted gold (the frame is 8
+    // sprites sharing the skin — tint multiplies the drawn art). Vertical
+    // stacking stays vanilla: bottom-up, so the first flushed entry lands at
+    // the bottom.
     // ==========================================================================
 
     if (typeof CGMZ_Window_Toast !== 'undefined' && CGMZ_Window_Toast.prototype.refresh) {
         const alias_CGMZ_Window_Toast_refresh = CGMZ_Window_Toast.prototype.refresh;
         CGMZ_Window_Toast.prototype.refresh = function (toastObject) {
+            this._wteActiveToast = toastObject || null; // stashed before: processCustomToast runs inside
             alias_CGMZ_Window_Toast_refresh.call(this, toastObject);
+            const tinted = !!(toastObject && toastObject._wteLootToast && toastObject._wteShrine);
+            if (this._frameSprite) {
+                for (const child of this._frameSprite.children) {
+                    child.tint = tinted ? CONFIG.SHRINE_FRAME_COLOR : 0xFFFFFF;
+                }
+            }
             if (toastObject && toastObject._wteLootToast) {
                 this.x = Graphics.boxWidth - this.width - CONFIG.RIGHT_MARGIN;
             }
         };
+
+        if (CGMZ_Window_Toast.prototype.processCustomToast) {
+            const alias_CGMZ_Window_Toast_processCustomToast = CGMZ_Window_Toast.prototype.processCustomToast;
+            CGMZ_Window_Toast.prototype.processCustomToast = function (toastObject) {
+                alias_CGMZ_Window_Toast_processCustomToast.call(this, toastObject);
+                if (!toastObject || !toastObject._wteSummaryFace) return;
+                // Draw the actual rolled die face (official d1-d6 art) at the
+                // left of the single-line summary toast, text shifted right.
+                const bitmap = ImageManager.loadPicture('d' + toastObject._wteSummaryFace);
+                const draw = () => {
+                    // redraw only while this very toast is still on this window
+                    if (this._wteActiveToast !== toastObject || !this.isDisplaying()) return;
+                    const size = Math.max(16, this.contents.height - 6);
+                    const y = Math.max(0, (this.contents.height - size) / 2);
+                    this.contents.clear();
+                    this.contents.blt(bitmap, 0, 0, bitmap.width, bitmap.height, 2, y, size, size);
+                    if (toastObject.lineOne && toastObject.lineOne.trim()) {
+                        this.CGMZ_drawTextLine(toastObject.lineOne, size + 8, 0,
+                            this.contents.width - size - 8, 'left');
+                    }
+                };
+                if (bitmap.isReady()) draw();
+                else bitmap.addLoadListener(draw);
+            };
+        }
     }
 })();
