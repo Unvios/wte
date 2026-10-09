@@ -326,7 +326,10 @@
                 !$gameMessage.isBusy()) {
                 const lines = collectTextLines(this);
                 const text = lines.join(' ').trim();
-                if (text && /\bappears?\b/i.test(text)) return true;
+                // Announcement-style lines only: "A Cute Flower attacks!",
+                // "The Mall Administrator appears!" — short, article-first.
+                if (text && text.length < 70 && /^(A|An|The)\b/.test(text) &&
+                    /\b(appears?|attacks?|emerges?|approaches?)\b/i.test(text)) return true;
                 return showVanillaMessage(this, params, lines);
             }
             return alias_Game_Interpreter_command101.call(this, params);
