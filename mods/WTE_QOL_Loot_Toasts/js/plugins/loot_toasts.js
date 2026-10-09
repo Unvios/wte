@@ -194,8 +194,8 @@
         }
         const scene = SceneManager._scene;
         if (scene && scene._cgmz_hasToastWindows) {
-            const wins = [scene._cgmz_toastWindow1, scene._cgmz_toastWindow2, scene._cgmz_toastWindow3];
-            for (const win of wins) {
+            for (let i = 1; i <= CGMZ.ToastManager.MaxWindowCount; i++) {
+                const win = scene['_cgmz_toastWindow' + i];
                 if (win && win.isDisplaying() && win._wteActiveToast && win._wteActiveToast._wteLootToast) {
                     win._showCount = 0;
                     win.opacity = 0;
@@ -438,6 +438,18 @@
         // slot count here gives every scene more toast windows.
         if (CONFIG.MAX_TOAST_SLOTS > 3 && typeof CGMZ !== 'undefined' && CGMZ.ToastManager) {
             CGMZ.ToastManager.MaxWindowCount = CONFIG.MAX_TOAST_SLOTS;
+        }
+        if (typeof CGMZ_Window_Toast !== 'undefined' && Scene_Base.prototype.CGMZ_ToastManager_createToastWindows) {
+            // CGMZ v1.5.0 hardcodes at most 3 toast windows; create as many as
+            // MaxWindowCount says, otherwise the extra slots do not exist.
+            Scene_Base.prototype.CGMZ_ToastManager_createToastWindows = function () {
+                for (let i = 1; i <= CGMZ.ToastManager.MaxWindowCount; i++) {
+                    const win = new CGMZ_Window_Toast(this.CGMZ_ToastManager_toastWindowRect());
+                    this['_cgmz_toastWindow' + i] = win;
+                    this.CGMZ_ToastManager_addToast(win);
+                }
+                this._cgmz_hasToastWindows = true;
+            };
         }
         const alias_Scene_Base_CGMZ_ToastManager_updateToastWindows = Scene_Base.prototype.CGMZ_ToastManager_updateToastWindows;
         Scene_Base.prototype.CGMZ_ToastManager_updateToastWindows = function () {
