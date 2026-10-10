@@ -376,7 +376,6 @@
         }
         return null;
     }
-    }
 
     // ==========================================================================
     // Interception: messages inside the loot flow are buffered as batch
