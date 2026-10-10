@@ -7,6 +7,7 @@
 /mods/*
 !/mods/WTE_QOL_*/
 /mods/!*/
+mods/WTE_QOL_Hotkeys/logs/
 
 !/docs/
 

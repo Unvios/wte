@@ -1,5 +1,5 @@
 {
-  "name": "WTE QOL Hotkeys Consumable",
+  "name": "WTE QOL Hotkeys",
   "author": "Unvios",
   "version": "1.0.0",
   "description": "Quick-use slots on keys 1-9 and 0 for consumable items, skills and rituals. Hover an entry in the inventory or skill menu and press a digit to bind it (same digit on the same entry unbinds; a different entry replaces the binding). Use on the field with free control or in battle during the actor's own input (consumes the turn, skills pay MP). Ctrl+digit on the field applies equipment loadouts (WTE_EquipmentLoadouts) with a toast showing the loadout name. A center-bottom toast announces each use, just like the world item-pickup toast, and a HUD bar in the top-right screen corner shows each bound slot's icon, key and inventory count (greyed when unusable, hidden when unbound). Bindings persist in saves. No data files are edited; disabling the mod reverts everything.",
