@@ -1,7 +1,7 @@
 {
   "name": "WTE QOL Loot Toasts",
   "author": "Unvios",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Streamlines post-battle flow with zero data edits: items appear as icon-only toasts at the bottom right (combat shrine bonus loot gets a gold frame and sinks to the bottom of the stack), and one summary toast on top shows the rolled die face, earned EXP and gold. Control returns instantly; battle start announcements (\"A Rat appears!\"), corpse texts and the \"Victory!\" window are skipped. Disabling the mod restores vanilla behavior.",
   "priority": 10
 }

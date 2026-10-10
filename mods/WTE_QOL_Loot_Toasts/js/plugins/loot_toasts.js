@@ -53,7 +53,7 @@
         MAX_TOAST_SLOTS: 7,                         // CGMZ toast slots; the game default is 3
         DEBUG: false,
         DEBUG_FORCE_SHRINE: false,                 // test helper: mark every drop as shrine loot
-        LOG_FILE: 'loot_toasts_debug.log',          // console is unavailable in this build; DEBUG writes here
+        LOG_MAX_BYTES: 524288,                      // support log rotates past 512 KB
     };
 
     // Raw event strings (byte-exact) that we replace with rebuilt, word-free text.
@@ -61,14 +61,64 @@
     const RAW_ITEM = 'Obtained \\C[6]\\ii[\\V[30]]';
     const RAW_GOLD = 'Obtained \\i[314]\\c[14]\\v[1039]\\c[0]!';
 
-    const log = (...args) => {
-        if (!CONFIG.DEBUG) return;
-        const line = `[LootToasts] ${args.join(' ')}`;
+    // Support logging: everything goes to logs/ inside the mod folder (kept
+    // out of git by the mod's own .gitignore). Info lines are always written;
+    // logDebug adds detail when DEBUG is on. The file is restarted once it
+    // grows past LOG_MAX_BYTES. Timestamps make remote debugging possible.
+    const MOD_VERSION = '1.1.0';
+
+    const LOG_PATH = (() => {
         try {
-            console.log(line);
-            require('fs').appendFileSync(CONFIG.LOG_FILE, `${line}\n`);
+            const path = require('path');
+            return path.join(path.dirname(process.mainModule.filename),
+                'mods', 'WTE_QOL_Loot_Toasts', 'logs', 'loot_toasts.log');
+        } catch (e) {
+            return null;
+        }
+    })();
+
+    let logBytes = 0;
+
+    function writeLog(tag, args) {
+        if (!LOG_PATH) return;
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            if (logBytes === 0) {
+                if (fs.existsSync(LOG_PATH)) {
+                    const size = fs.statSync(LOG_PATH).size;
+                    if (size > CONFIG.LOG_MAX_BYTES) fs.unlinkSync(LOG_PATH);
+                    else logBytes = size;
+                }
+                if (!fs.existsSync(path.dirname(LOG_PATH))) {
+                    fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
+                }
+            }
+            const line = `[${new Date().toISOString()}] [LootToasts] [${tag}] ${args.join(' ')}\n`;
+            fs.appendFileSync(LOG_PATH, line);
+            logBytes += line.length;
         } catch (e) { /* logging must never break the game */ }
-    };
+    }
+
+    const log = (...args) => writeLog('INFO', args);
+    const logDebug = (...args) => { if (CONFIG.DEBUG) writeLog('DEBUG', args); };
+
+    // Uncaught errors are not necessarily ours, but they are the first thing
+    // to check when the mod "breaks the game" on someone else's machine.
+    if (typeof window !== 'undefined') {
+        window.addEventListener('error', (e) => {
+            writeLog('ERROR', [`uncaught: ${e.message} @ ${e.filename}:${e.lineno}`]);
+        });
+        window.addEventListener('unhandledrejection', (e) => {
+            writeLog('ERROR', [`unhandled rejection: ${e.reason}`]);
+        });
+    }
+
+    log(`mod v${MOD_VERSION} loaded`,
+        `| slots=${CONFIG.MAX_TOAST_SLOTS} time=${CONFIG.TOAST_DISPLAY_TIME}f`,
+        `| battleStart=${CONFIG.REMOVE_BATTLE_START_MESSAGES}`,
+        `| victoryExp=${CONFIG.VICTORY_EXP_TOAST}`,
+        `| CE=${CONFIG.BATTLE_WIN_CE_ID}`);
 
     const localize = (text) => {
         if (typeof window.Hendrix_Localization === 'function') return window.Hendrix_Localization(text);
@@ -158,7 +208,7 @@
             _wteShrine: !!shrine, // gold tint for the windowskin frame
             _wteSummaryFace: face || 0, // die face drawn from the d1-d6 pictures
         });
-        log('toast:', text);
+        logDebug('toast:', text);
         return true;
     }
 
@@ -230,6 +280,7 @@
         rollFace = 0;
         if (!lootBatch.length && expAmount === null && !face) return;
         purgeLootToasts();
+        log(`flush: items=${lootBatch.length} exp=${expAmount === null ? 'none' : expAmount} face=${face || 'none'}`);
         const batch = lootBatch;
         lootBatch = [];
         let goldTotal = 0;
@@ -320,9 +371,11 @@
                     text: `\\i[${data.iconIndex}]\\c[14]${localize(data.name)}\\c[0]`,
                 };
             }
+            log('drop not tracked via 126/127/128 — wrapper word stripped only:', raw.slice(0, 60));
             return { kind: 'item', text: raw.slice('Obtained '.length) };
         }
         return null;
+    }
     }
 
     // ==========================================================================
@@ -359,12 +412,14 @@
             // The die face CEs use an empty message as a blocking pause; the
             // face value goes into the summary toast.
             rollFace = diceFaceOfList(this._list);
+            logDebug('roll:', rollFace);
             return true;
         }
         if (CONFIG.SUPPRESSED_TEXTS.indexOf(text) !== -1) return true;
         if (text === CONFIG.SHRINE_REWARD_TEXT) {
             // Combat shrine bonus loot follows; mark it instead of wording it.
             shrineLootActive = true;
+            log('combat shrine reward flag on');
             return true;
         }
 
@@ -372,6 +427,7 @@
         // message (the choice window has no text of its own).
         const nextCode = this.nextEventCode();
         if (nextCode === 102 || nextCode === 103 || nextCode === 104) {
+            log('message followed by choice/number/item window — vanilla window used:', text.slice(0, 60));
             return showVanillaMessage(this, params, lines);
         }
 
