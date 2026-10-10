@@ -243,7 +243,8 @@
                 .filter(toast => !(toast && toast._wteLootToast));
         }
         const scene = SceneManager._scene;
-        if (scene && scene._cgmz_hasToastWindows) {
+        if (scene && scene._cgmz_hasToastWindows &&
+            typeof CGMZ !== 'undefined' && CGMZ.ToastManager) {
             for (let i = 1; i <= CGMZ.ToastManager.MaxWindowCount; i++) {
                 const win = scene['_cgmz_toastWindow' + i];
                 if (win && win.isDisplaying() && win._wteActiveToast && win._wteActiveToast._wteLootToast) {
