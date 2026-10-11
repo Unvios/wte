@@ -104,7 +104,7 @@
     // Logging. Operational events (binds, uses, refusals with reasons,
     // loadouts, errors with stacks) are ALWAYS written — that is what makes
     // remote debugging of someone else's install possible. DEBUG only adds
-    // verbose internals. The file lives in <game>/mods/WTE_QOL_Hotkeys/logs/
+    // verbose internals. The file lives in <game>/mods/WTE_QOL_Hotbar/logs/
     // and is truncated once it grows past 1 MiB.
     // ==========================================================================
 
@@ -112,7 +112,7 @@
         try {
             const path = require('path');
             const root = path.dirname(process.mainModule.filename);
-            return path.join(root, 'mods', 'WTE_QOL_Hotkeys',
+            return path.join(root, 'mods', 'WTE_QOL_Hotbar',
                 CONFIG.LOG_DIR, CONFIG.LOG_FILE);
         } catch (e) { return null; }
     })();
