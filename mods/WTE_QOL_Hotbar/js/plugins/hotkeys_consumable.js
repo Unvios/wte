@@ -108,6 +108,8 @@
     // and is truncated once it grows past 1 MiB.
     // ==========================================================================
 
+    const MOD_VERSION = '1.0.2a.1';
+
     const LOG_PATH = (() => {
         try {
             const path = require('path');
@@ -886,7 +888,8 @@
         }
     };
 
-    logEvent(`loaded: slots=${SLOT_COUNT} keys=${CONFIG.SLOT_KEYS.join('')} ` +
-        `modifier=${CONFIG.LOADOUT_MODIFIER} extraItemIds=[${CONFIG.EXTRA_ITEM_IDS}] ` +
-        `debug=${CONFIG.DEBUG} log=${LOG_PATH || 'unavailable'}`);
+    logEvent(`mod v${MOD_VERSION} loaded`,
+        `| slots=${SLOT_COUNT} keys=${CONFIG.SLOT_KEYS.join('')}`,
+        `| modifier=${CONFIG.LOADOUT_MODIFIER} extraItemIds=[${CONFIG.EXTRA_ITEM_IDS}]`,
+        `| debug=${CONFIG.DEBUG} log=${LOG_PATH || 'unavailable'}`);
 })();
