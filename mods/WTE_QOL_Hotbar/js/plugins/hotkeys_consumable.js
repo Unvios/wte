@@ -42,6 +42,13 @@
  * every language the game ships; the item/skill/loadout name itself is
  * localized from the game database.
  *
+ * Common events: when a used entry reserves a common event, the map scene
+ * restarts exactly like the vanilla item/skill menu (checkCommonEvent), so
+ * event behavior — including battle-context visuals — matches menu usage.
+ * Do not "optimize" this away: some of the game's CEs (e.g. Lesser
+ * Mending's CE 291) crash when run on a live map scene but work on a fresh
+ * one.
+ *
  * Bindings live on $gameSystem and persist through save/load.
  * No data files are edited. Disabling the mod restores vanilla behavior.
  */
@@ -517,10 +524,12 @@
     }
 
     // Shared tail of map usage: effects, global effects (incl. common
-    // events), toast and gameover check. A reserved common event starts on
-    // the map interpreter by itself — restarting Scene_Map (vanilla's
-    // checkCommonEvent does SceneManager.goto from menu scenes) would just
-    // trigger fade/loading plugins, so it is skipped when already on the map.
+    // events), toast and gameover check. Reserved common events restart the
+    // map scene exactly like vanilla Scene_ItemBase.checkCommonEvent does
+    // (SceneManager.goto) — do NOT skip the restart when already on the
+    // map: CEs that run battle-context plugin commands (e.g. Lesser
+    // Mending's CE 291 with VisuStella action sequences) execute fine on a
+    // fresh Scene_Map but crash on a live one (null battler sprites).
     function applyEntry(user, action, targets, obj) {
         user.useItem(obj);
         for (const target of targets) {
@@ -530,9 +539,10 @@
         }
         action.applyGlobal();
         showUseToast(obj);
-        logEvent(`used on map: ${obj.name} (#${obj.id}), left: ${$gameParty.numItems(obj)}`);
+        const left = DataManager.isItem(obj) ? `, left: ${$gameParty.numItems(obj)}` : '';
+        logEvent(`used on map: ${obj.name} (#${obj.id})${left}`);
         log(`CE reserved: ${$gameTemp.isCommonEventReserved()}, scene: ${SceneManager._scene.constructor.name}`);
-        if ($gameTemp.isCommonEventReserved() && !(SceneManager._scene instanceof Scene_Map)) {
+        if ($gameTemp.isCommonEventReserved()) {
             SceneManager.goto(Scene_Map);
         }
         if ($gameParty.isAllDead()) {
@@ -601,7 +611,7 @@
         actor.refresh();
         SoundManager.playEquip();
         showIconToast(toastIcon, textFor('equipped') + localize(loadout.name));
-        logEvent(`loadout ${keyLabel} "${loadout.name}" applied to ${actor.name()}`);
+        logEvent(`loadout ${keyLabel} "${loadout.name}" applied to actor #${actor.actorId()} (${actor.name() || 'unnamed'})`);
     }
 
     const alias_Scene_Map_update = Scene_Map.prototype.update;
