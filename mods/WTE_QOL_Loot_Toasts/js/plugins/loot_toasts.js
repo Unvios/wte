@@ -65,7 +65,7 @@
     // out of git by the mod's own .gitignore). Info lines are always written;
     // logDebug adds detail when DEBUG is on. The file is restarted once it
     // grows past LOG_MAX_BYTES. Timestamps make remote debugging possible.
-    const MOD_VERSION = '1.0.2a.1';
+    const MOD_VERSION = '1.0.2a.2';
 
     const LOG_PATH = (() => {
         try {
@@ -97,6 +97,10 @@
             const line = `[${new Date().toISOString()}] [LootToasts] [${tag}] ${args.join(' ')}\n`;
             fs.appendFileSync(LOG_PATH, line);
             logBytes += line.length;
+            if (logBytes > CONFIG.LOG_MAX_BYTES) {
+                fs.unlinkSync(LOG_PATH);
+                logBytes = 0;
+            }
         } catch (e) { /* logging must never break the game */ }
     }
 
@@ -166,6 +170,22 @@
         return lines;
     }
 
+    function peekTextLines(interpreter) {
+        // Read the 401 lines after the current command without moving _index,
+        // so a non-suppressed message can go through the vanilla chain.
+        const list = interpreter._list;
+        const lines = [];
+        if (!list) return lines;
+        for (let i = interpreter._index + 1; i < list.length && list[i].code === 401; i++) {
+            lines.push(list[i].parameters[0]);
+        }
+        return lines;
+    }
+
+    function skipTextLines(interpreter) {
+        while (interpreter.nextEventCode() === 401) interpreter._index++;
+    }
+
     function showVanillaMessage(interpreter, params, lines) {
         $gameMessage.setFaceImage(params[0], params[1]);
         $gameMessage.setBackground(params[2]);
@@ -224,9 +244,7 @@
     // Display order for the flush. The stack grows bottom-up, so enqueue
     // shrine items first to read top-down as:
     // summary (die face + EXP + gold) -> plain items -> shrine items.
-    const KIND_ORDER = { plain: 1, item: 1 };
-    const batchOrder = (entry) =>
-        entry.kind === 'item' && entry.shrine ? 0 : KIND_ORDER[entry.kind];
+    const batchOrder = (entry) => (entry.kind === 'item' && entry.shrine ? 0 : 1);
 
     let lootBatch = [];
     let lastDrop = null;
@@ -272,6 +290,7 @@
         if (CONFIG.DEBUG_FORCE_SHRINE && inFlow) shrineLootActive = true;
         if (inFlow) return;
         shrineLootActive = false;
+        lastDrop = null;
         // Battle just ended (or had no loot flow): flush the batch. Items go
         // first (shrine items at the very bottom of the bottom-up stack); the
         // die face, earned EXP and gold merge into one summary toast on top.
@@ -389,18 +408,24 @@
     const alias_Game_Interpreter_command101 = Game_Interpreter.prototype.command101;
     Game_Interpreter.prototype.command101 = function (params) {
         if (!isLootFlow()) {
-            // Battle start: troops announce themselves ("A Rat appears!") in a
-            // message window. Skip those and go straight to the fight.
+            // Battle start (turn 0): troops announce themselves ("A Rat
+            // appears!") in a message window. Peek at the text without
+            // consuming the 401 lines: matching announcements are skipped,
+            // everything else goes through the untouched vanilla chain
+            // (including other plugins' command101 hooks).
             if (CONFIG.REMOVE_BATTLE_START_MESSAGES &&
                 typeof Scene_Battle === 'function' && SceneManager._scene instanceof Scene_Battle &&
+                $gameTroop && $gameTroop.turnCount() === 0 &&
                 !$gameMessage.isBusy()) {
-                const lines = collectTextLines(this);
-                const text = lines.join(' ').trim();
+                const text = peekTextLines(this).join(' ').trim();
                 // Announcement-style lines only: "A Cute Flower attacks!",
                 // "The Mall Administrator appears!" — short, article-first.
                 if (text && text.length < 70 && /^(A|An|The)\b/.test(text) &&
-                    /\b(appears?|attacks?|emerges?|approaches?)\b/i.test(text)) return true;
-                return showVanillaMessage(this, params, lines);
+                    /\b(appears?|attacks?|emerges?|approaches?)\b/i.test(text)) {
+                    skipTextLines(this);
+                    logDebug('battle start announcement skipped:', text);
+                    return true;
+                }
             }
             return alias_Game_Interpreter_command101.call(this, params);
         }

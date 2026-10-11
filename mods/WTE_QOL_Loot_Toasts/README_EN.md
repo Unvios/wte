@@ -14,7 +14,8 @@ control returns the moment the die stops rolling.
 - **Combat shrine bonus loot** — same item toasts with a gold frame, sunk to
   the bottom of the stack. The "The combat shrine rewards you..." line is gone.
 - Reading order is always top-down: **summary → items → shrine items**.
-  A new battle replaces the previous stack.
+  When a new battle's loot is handed out, the previous battle's toasts are
+  cleared instantly.
 - No more windows: "A Rat appears!" / "A Cute Flower attacks!" (battle start),
   "The corpse is intact / mangled", "Victory! Obtained: N EXP" — all skipped.
 
@@ -57,6 +58,13 @@ All settings live in the `CONFIG` object at the top of
 | `SHRINE_FRAME_COLOR` | `0xFFD700` | frame tint for combat shrine loot |
 | `REMOVE_BATTLE_START_MESSAGES` | `true` | hide "X appears!" announcements |
 | `VICTORY_EXP_TOAST` | `true` | fold "Victory!/N EXP" into the summary toast |
+| `BATTLE_WIN_CE_ID` | `27` | id of the "Battle Win" common event |
+| `DICE_ANIMATION_CE_ID` | `28` | id of the die roll animation event (skipped entirely) |
+| `DICE_FACE_CE_IDS` | `[29–34]` | ids of the die face 1–6 events (their empty pause marks the roll) |
+| `SUPPRESSED_PICTURES` | `[5, 11, 12]` | loot flow picture numbers that are never shown |
+| `SUPPRESSED_TEXTS` | 3 lines | corpse state texts — never shown |
+| `SHRINE_REWARD_TEXT` | `'The combat shrine rewards you...'` | flag line for combat shrine bonus loot |
+| `LOG_MAX_BYTES` | `524288` | log rotation threshold (512 KB) |
 | `DEBUG` | `false` | verbose DEBUG log lines |
 
 ## Logs for troubleshooting
