@@ -12,3 +12,5 @@ mods/WTE_QOL_Hotbar/logs/
 !/docs/
 
 !/tools/
+
+dist/

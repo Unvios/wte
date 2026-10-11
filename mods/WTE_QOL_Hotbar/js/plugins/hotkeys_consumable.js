@@ -32,7 +32,7 @@
  *   shows a toast with the loadout name. Empty loadouts buzz.
  *
  * HUD:
- *   A frameless bar in the top-left screen corner shows each bound slot:
+ *   A frameless bar in the bottom-left screen corner shows each bound slot:
  *   icon, inventory count at the icon's bottom-right (items only) and the
  *   hotkey digit centered under the icon. Out-of-stock items and
  *   unaffordable/unknown skills show greyed. Slots without a binding are
@@ -42,12 +42,14 @@
  * every language the game ships; the item/skill/loadout name itself is
  * localized from the game database.
  *
- * Common events: when a used entry reserves a common event, the map scene
- * restarts exactly like the vanilla item/skill menu (checkCommonEvent), so
- * event behavior — including battle-context visuals — matches menu usage.
- * Do not "optimize" this away: some of the game's CEs (e.g. Lesser
- * Mending's CE 291) crash when run on a live map scene but work on a fresh
- * one.
+ * Common events: when a used entry reserves a common event, it runs on the
+ * live map scene — the same thing the game does after menu usage (its
+ * WTE_FastMenu restores the cached Scene_Map instead of rebuilding it), so
+ * no scene restart means no visual rebuild flicker. CEs containing
+ * battle-only VisuMZ BattleCore ActSeq_* plugin commands (e.g. Lesser
+ * Mending's CE 291) operate on battler sprites that exist only in battle;
+ * off-battle those commands are error-guarded and skipped so the rest of
+ * the event (switches, sub-events, effects) completes normally.
  *
  * Bindings live on $gameSystem and persist through save/load.
  * No data files are edited. Disabling the mod restores vanilla behavior.
@@ -115,7 +117,7 @@
     // and is truncated once it grows past 1 MiB.
     // ==========================================================================
 
-    const MOD_VERSION = '1.0.2a.2';
+    const MOD_VERSION = '1.0.2a.3';
 
     const LOG_PATH = (() => {
         try {
@@ -288,6 +290,7 @@
         alias_Scene_Item_update.call(this);
         try {
             if (!this._itemWindow || !this._itemWindow.active) return;
+            if (Input.isPressed(CONFIG.LOADOUT_MODIFIER)) return; // Ctrl+digit = loadouts, not binds
             for (let i = 0; i < SLOT_COUNT; i++) {
                 if (Input.isTriggered(CONFIG.SLOT_KEYS[i])) {
                     const item = this._itemWindow.item();
@@ -316,6 +319,7 @@
         alias_Scene_Skill_update.call(this);
         try {
             if (!this._itemWindow || !this._itemWindow.active) return;
+            if (Input.isPressed(CONFIG.LOADOUT_MODIFIER)) return; // Ctrl+digit = loadouts, not binds
             for (let i = 0; i < SLOT_COUNT; i++) {
                 if (Input.isTriggered(CONFIG.SLOT_KEYS[i])) {
                     const skill = this._itemWindow.item();
@@ -363,15 +367,20 @@
 
     function drawSlotBadgeAt(window, iconX, iconY, iconW, slotIndex) {
         const badgeWidth = 14;
+        const prevFontSize = window.contents.fontSize;
         window.changeTextColor(ColorManager.systemColor());
         window.contents.fontSize = 12;
         window.contents.drawText(CONFIG.SLOT_KEYS[slotIndex],
             iconX + iconW - badgeWidth, iconY, badgeWidth, 13, 'right');
-        window.contents.fontSize = $gameSystem.mainFontSize();
+        window.contents.fontSize = prevFontSize;
         window.resetTextColor();
     }
 
     function badgeAfterRow(window, index, obj, t) {
+        // Badges only where binding actually works (the bind hooks live on
+        // Scene_Item/Scene_Skill) — not in sell/battle/container lists.
+        if (!(SceneManager._scene instanceof Scene_Item) &&
+            !(SceneManager._scene instanceof Scene_Skill)) return;
         const slotIndex = slotIndexFor(t, obj.id);
         if (slotIndex < 0) return;
         const icons = window._wteRowIcons ||
@@ -409,8 +418,11 @@
     const alias_Window_ItemList_drawItem = Window_ItemList.prototype.drawItem;
     Window_ItemList.prototype.drawItem = function (index) {
         beginBadgeRow(this, index);
-        alias_Window_ItemList_drawItem.call(this, index);
-        endBadgeRow(this);
+        try {
+            alias_Window_ItemList_drawItem.call(this, index);
+        } finally {
+            endBadgeRow(this); // a draw error must not leak the capture flag
+        }
         const item = this.itemAt(index);
         if (!item || !DataManager.isItem(item)) return; // dummies, weapons, armors
         badgeAfterRow(this, index, item, 'item');
@@ -419,8 +431,11 @@
     const alias_Window_SkillList_drawItem = Window_SkillList.prototype.drawItem;
     Window_SkillList.prototype.drawItem = function (index) {
         beginBadgeRow(this, index);
-        alias_Window_SkillList_drawItem.call(this, index);
-        endBadgeRow(this);
+        try {
+            alias_Window_SkillList_drawItem.call(this, index);
+        } finally {
+            endBadgeRow(this);
+        }
         const skill = this.itemAt(index);
         if (!skill || !DataManager.isSkill(skill)) return;
         badgeAfterRow(this, index, skill, 'skill');
@@ -457,7 +472,11 @@
     }
 
     function useItemOnMap(item) {
-        if (!item) return;
+        if (!item) {
+            SoundManager.playBuzzer();
+            logEvent('map use refused: bound item no longer exists in the database');
+            return;
+        }
         const user = hotkeyUser();
         if (!user) {
             SoundManager.playBuzzer();
@@ -488,7 +507,11 @@
     }
 
     function useSkillOnMap(skill) {
-        if (!skill) return;
+        if (!skill) {
+            SoundManager.playBuzzer();
+            logEvent('map skill refused: bound skill no longer exists in the database');
+            return;
+        }
         const user = hotkeySkillUser();
         const known = !!(user && user.hasSkill(skill.id));
         const canUse = !!(user && user.canUse(skill));
@@ -524,12 +547,14 @@
     }
 
     // Shared tail of map usage: effects, global effects (incl. common
-    // events), toast and gameover check. Reserved common events restart the
-    // map scene exactly like vanilla Scene_ItemBase.checkCommonEvent does
-    // (SceneManager.goto) — do NOT skip the restart when already on the
-    // map: CEs that run battle-context plugin commands (e.g. Lesser
-    // Mending's CE 291 with VisuStella action sequences) execute fine on a
-    // fresh Scene_Map but crash on a live one (null battler sprites).
+    // events), toast and gameover check. A reserved common event is left to
+    // run on the live map scene — exactly what the game itself does after
+    // menu usage, where WTE_FastMenu hands control back to the cached live
+    // Scene_Map instead of rebuilding it. Restarting the scene here rebuilt
+    // every visual layer (the screen visibly re-darkened) and fixed
+    // nothing: CEs containing battle-only VisuMZ ActSeq plugin commands
+    // (e.g. Lesser Mending's CE 291) crash on ANY map scene, fresh or not —
+    // those are guarded in the PluginManager.callCommand wrapper below.
     function applyEntry(user, action, targets, obj) {
         user.useItem(obj);
         for (const target of targets) {
@@ -540,11 +565,8 @@
         action.applyGlobal();
         showUseToast(obj);
         const left = DataManager.isItem(obj) ? `, left: ${$gameParty.numItems(obj)}` : '';
-        logEvent(`used on map: ${obj.name} (#${obj.id})${left}`);
-        log(`CE reserved: ${$gameTemp.isCommonEventReserved()}, scene: ${SceneManager._scene.constructor.name}`);
-        if ($gameTemp.isCommonEventReserved()) {
-            SceneManager.goto(Scene_Map);
-        }
+        logEvent(`used on map: ${obj.name} (#${obj.id})${left}`,
+            `CE reserved: ${$gameTemp.isCommonEventReserved()}`);
         if ($gameParty.isAllDead()) {
             SceneManager.goto(Scene_Gameover);
         }
@@ -557,20 +579,40 @@
     // ==========================================================================
 
     // The game announces equipment changes with MK_GabWindows gab windows
-    // (CE 2233 "New Equipment!" / CE 2234 "New Weapon!", top-left anchor)
-    // fired via DM_InvChangeCommonEvent after any equip change. During a
-    // hotkey loadout swap those are noise next to our named toast, so they
-    // are dropped for a few frames (the reserved CE runs on the map
-    // interpreter slightly after applyLoadout returns).
+    // (CE 2233 "New Equipment!" / CE 2234 "New Weapon!", gab ids "Notif" and
+    // "weapon", top-left anchor) fired via DM_InvChangeCommonEvent after any
+    // equip change. During a hotkey loadout swap those are noise next to our
+    // named toast, so they are dropped for a few frames (the reserved CE
+    // runs on the map interpreter slightly after applyLoadout returns). The
+    // gab-id filter keeps unrelated gab windows alive even in that window.
     let suppressEquipGabs = 0;
 
     const alias_PluginManager_callCommand = PluginManager.callCommand;
     PluginManager.callCommand = function (interpreter, pluginName, commandName, args) {
-        if (suppressEquipGabs > 0 && pluginName === 'MK_GabWindows' && commandName === 'addGabWindow') {
+        if (suppressEquipGabs > 0 && pluginName === 'MK_GabWindows' &&
+            commandName === 'addGabWindow' && args &&
+            (args.id === 'Notif' || args.id === 'weapon')) {
             log('suppressed equip gab window');
             return;
         }
-        alias_PluginManager_callCommand.call(this, interpreter, pluginName, commandName, args);
+        // VisuMZ BattleCore ActSeq_* commands drive battler sprites, which
+        // do not exist outside battle — on any map scene (fresh or cached)
+        // they throw (e.g. "MOVE: Battle Step" in Lesser Mending's CE 291
+        // reads _baseX of a null sprite). Swallow that error off-battle so
+        // the rest of the common event (switches, sub-events, the actual
+        // heal/effects) completes, exactly as the "Can be used outside of
+        // battle" description intends. In battle everything passes through.
+        if (pluginName === 'VisuMZ_1_BattleCore' &&
+            typeof commandName === 'string' && commandName.startsWith('ActSeq_') &&
+            !$gameParty.inBattle()) {
+            try {
+                return alias_PluginManager_callCommand.call(this, interpreter, pluginName, commandName, args);
+            } catch (e) {
+                logEvent(`off-battle ActSeq skipped: ${commandName} — ${e && e.message ? e.message : e}`);
+                return true;
+            }
+        }
+        return alias_PluginManager_callCommand.call(this, interpreter, pluginName, commandName, args);
     };
 
     function applyLoadout(index) {
@@ -610,7 +652,7 @@
         actor._mp = Math.min(preMp, actor.mmp);
         actor.refresh();
         SoundManager.playEquip();
-        showIconToast(toastIcon, textFor('equipped') + localize(loadout.name));
+        showIconToast(textFor('equipped'), toastIcon, localize(loadout.name));
         logEvent(`loadout ${keyLabel} "${loadout.name}" applied to actor #${actor.actorId()} (${actor.name() || 'unnamed'})`);
     }
 
@@ -651,7 +693,11 @@
     // ==========================================================================
 
     function useItemInBattle(item, actor, action) {
-        if (!item) return;
+        if (!item) {
+            SoundManager.playBuzzer();
+            logEvent('battle use refused: bound item no longer exists in the database');
+            return;
+        }
         if (!actor || !actor.canUse(item)) {
             SoundManager.playBuzzer();
             logEvent(`battle use refused: ${item ? item.name : 'none'}`,
@@ -670,7 +716,11 @@
     }
 
     function useSkillInBattle(skill, actor, action) {
-        if (!skill) return;
+        if (!skill) {
+            SoundManager.playBuzzer();
+            logEvent('battle skill refused: bound skill no longer exists in the database');
+            return;
+        }
         if (!actor || !actor.hasSkill(skill.id) || !actor.canUse(skill)) {
             SoundManager.playBuzzer();
             logEvent(`battle skill refused: ${skill ? skill.name : 'none'}`,
@@ -742,16 +792,17 @@
     // ==========================================================================
 
     function showUseToast(obj) {
-        showIconToast(obj.iconIndex, textFor('used') + localize(obj.name));
+        showIconToast(textFor('used'), obj.iconIndex, localize(obj.name));
     }
 
-    function showIconToast(iconIndex, text) {
+    function showIconToast(prefix, iconIndex, text) {
         if (typeof $cgmzTemp === 'undefined' || !$cgmzTemp ||
             typeof $cgmzTemp.createNewToast !== 'function') return;
+        const prefixPart = prefix ? `\\C[0]${prefix}\\C[6]` : '';
         const icon = iconIndex ? `\\i[${iconIndex}]` : '';
         $cgmzTemp.createNewToast({
             isText: true,
-            lineOne: `\\C[6]${icon}${text}\\C[0]`,
+            lineOne: `${prefixPart}${icon}${text}\\C[0]`,
             lineOneColor: 0,
             lineOneAlignment: 'center',
             lineTwo: '',
@@ -767,7 +818,7 @@
     }
 
     // ==========================================================================
-    // HUD bar in the top-right screen corner (Scene_Map only). Implemented as
+    // HUD bar in the bottom-left screen corner (Scene_Map only). Implemented as
     // a plain Sprite inside SRD HUD Maker Ultra's `_ultraHudContainer`, so it
     // lives in the exact same coordinate space as the gold counter and the
     // clock (windowLayer positioning proved unreliable in this build).
@@ -782,7 +833,8 @@
     }
 
     function buildHudSignature() {
-        let sig = '';
+        const actor = $gameParty.menuActor();
+        let sig = actor ? `${actor.actorId()};` : ';';
         const s = slots();
         for (let i = 0; i < SLOT_COUNT; i++) {
             const entry = s[i];

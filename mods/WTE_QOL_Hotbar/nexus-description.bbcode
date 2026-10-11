@@ -1,0 +1,43 @@
+SHORT DESCRIPTION (Nexus "Summary" field):
+Ten quick-use slots for items, skills and rituals on keys 1-0, plus one-press equipment loadouts on Ctrl+digit.
+
+FULL DESCRIPTION (Nexus "Description" field, BBCode):
+[color=#f6b26b][size=4][b]Description[/b][/size][/color]
+[color=#D4D4D8]Ever wanted to eat food, drink coffee or heal without digging through the inventory in the middle of a dungeon? This mod adds a ten-slot quick-use hotbar to Welcome to Elderfield: bind consumable items, skills and rituals to the number keys 1-9 and 0, use them on the field or in battle, swap entire equipment loadouts with Ctrl+digit - and see every action announced by a toast, in every language the game supports.[/color]
+
+[b][color=#f6b26b][size=4]Main features[/size][/color][/b]
+[list]
+[*][color=#D4D4D8]Ten slots on keys 1-9 and 0. Hover an item in the inventory (or a skill/ritual in the skill menu) and press a key to bind it; press the same key again to unbind. Binding another entry moves the binding. Bound entries show their key digit right on the icon.[/color][/*]
+[*][color=#D4D4D8]Use on the field while you have free control, or in battle during the current hero's input - it consumes the turn, skills pay MP, exactly like choosing from the menu. A skill can only be used by a hero who knows it.[/color][/*]
+[*][color=#D4D4D8]A center-bottom toast announces every use ("Used: ...") with the same look as the world item-pickup toast.[/color][/*]
+[*][color=#D4D4D8]HUD bar in the bottom-left corner: icon, inventory count at the icon's corner and the key digit underneath. Out-of-stock items and skills you cannot cast right now (no MP, not learned) show greyed.[/color][/*]
+[*][color=#D4D4D8]Equipment loadouts on Ctrl+digit: swap the whole setup of the current hero in one press - with a toast naming the equipped set.[/color][/*]
+[*][color=#D4D4D8]Bindings are stored in your savegames.[/color][/*]
+[/list]
+[color=#D4D4D8]What it does NOT do:[/color]
+
+[list]
+[*][color=#D4D4D8]No game files are edited. Disable the mod = 100% original game.[/color][/*]
+[*][color=#D4D4D8]No balance changes: availability follows the game's own rules (occasions, MP, stock). The hotkey refuses - with a buzzer and a log line - exactly the cases where the field menu greys an entry out.[/color][/*]
+[*][color=#D4D4D8]Nothing changes if you never press the number keys.[/color][/*]
+[/list]
+
+[b][color=#f6b26b][size=4]Installation instructions[/size][/color][/b]
+[list=1]
+[*][color=#D4D4D8]Extract the archive into your game folder so that the [i][font=Courier New]WTE_QOL_Hotbar[/font][/i] folder ends up inside [i][font=Courier New]<game>\mods\[/font][/i].[/color][/*]
+[*][color=#D4D4D8]Enable the mod loader (once per game install): open [i][font=Courier New]<game>\js\plugins.js[/font][/i] in any text editor, find [i][font=Courier New]"name":"VirtualModLoader","status":false[/font][/i] and change [i][font=Courier New]false[/font][/i] to [i][font=Courier New]true[/font][/i]. Save the file.[/color][/*]
+[*][color=#D4D4D8]Launch the game - the loader rebuilds its injector and reloads once on first run. Done.[/color][/*]
+[/list]
+[quote][color=#D4D4D8]Note: game updates and Steam's "verify integrity of game files" restore the original [font=Courier New]js\plugins.js[/font] (loader off) and wipe the [font=Courier New]mods\[/font] folder - after each update repeat step 2 and re-drop the mod.[/color][/quote]
+
+[b][color=#f6b26b][size=4]Uninstall[/size][/color][/b]
+[color=#d4d4d8]Delete the [/color][i][font=Courier New][color=#d4d4d8]WTE_QOL_Hotbar[/color][/font][/i][color=#d4d4d8] folder from [/color][i][font=Courier New][color=#d4d4d8]mods\[/color][/font][/i][color=#d4d4d8] (or rename it to [/color][i][font=Courier New][color=#d4d4d8]!WTE_QOL_Hotbar[/color][/font][/i][color=#d4d4d8] to temporarily disable).[/color]
+
+[b][color=#f6b26b][size=4]Configuration[/size][/color][/b]
+[color=#D4D4D8]All settings live in the CONFIG object at the top of [i][font=Courier New]js\plugins\hotkeys_consumable.js[/font][/i] inside the mod folder: hotbar position and geometry, toast width/duration, the modifier key for loadouts, and EXTRA_ITEM_IDS - a whitelist that already lets you bind the Cup of Coffee, a menu-only item the game normally refuses outside the menu.[/color]
+
+[b][color=#f6b26b][size=4]Troubleshooting[/size][/color][/b]
+[color=#D4D4D8]The mod always writes a log to [i][font=Courier New]mods\WTE_QOL_Hotbar\logs\hotkeys_consumable.log[/font][/i]. If anything misbehaves, attach that file to your bug report - it records the mod version, every bind and use, every equipped loadout, every refusal with its reason, and any game errors.[/color]
+
+[b][color=#f6b26b][size=4]Credits[/size][/color][/b]
+[color=#D4D4D8]Made by Unvios.[/color]

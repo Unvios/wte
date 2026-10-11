@@ -79,19 +79,23 @@
 3. `SoundManager.playUseItem()` → `user.useItem(item)` → `Game_Action`
    + `setItemObject` → цели (`itemTargetActors` с `user` вместо окна
    актёра) ×`numRepeats()` → `applyGlobal()` → тост → геймовер-проверка.
-4. Reserved CE: `SceneManager.goto(Scene_Map)` вызывается ТОЛЬКО если
-   текущая сцена не карта. На карте зарезервированное CE запускает сам
-   `Game_Map` (`setupReservedCommonEvent` в `updateInterpreter`) — лишний
-   рестарт сцены провоцировал визуальные артефакты (замеченное игроком
-   «медленное темнение»).
+4. Reserved CE: сцена НЕ перезапускается — CE доигрывает на живой карте
+   через штатный `Game_Map.updateInterpreter`. Это и есть реальное
+   поведение игры после меню: `WTE_FastMenu` при закрытии меню восстанавливает
+   закешированную ЖИВУЮ `Scene_Map`, а не строит новую (поэтому использование
+   из инвентаря не темнит экран). Рестарт сцены пересоздавал все визуальные
+   слои (замеченное игроком «медленное темнение») и ничего не чинил.
 Хук — алиас `Scene_Map.prototype.update`, гейт `$gamePlayer.canMove()`.
-Зарезервированное CE: `SceneManager.goto(Scene_Map)` ВСЕГДА (как ванильный
-`Scene_ItemBase.checkCommonEvent`) — не пропускать рестарт, когда уже на
-карте. Причина: CE с боевыми плагин-командами (напр. CE 291 «Малое
-исцеление»: `MOVE: Battle Step`, `INJECT: Animation Begin`, `MECH: Action
-Effect` — идут по спрайтам боевых юнитов, `_baseX`) падают с TypeError на
-ЖИВОЙ сцене карты, но отрабатывают на СВЕЖЕЙ (после боя/рестарта меню) —
-краш-репорт v1.0.2a.1-hotbar.
+
+Краш CE 291 «Малое исцеление» (TypeError `_baseX` of null): CE содержит
+боевые плагин-команды VisuMZ BattleCore `ActSeq_*` (`MOVE: Battle Step`,
+`INJECT: Animation Begin`, `MECH: Action Effect`), которые идут по спрайтам
+боевых юнитов — их нет на ЛЮБОЙ сцене карты, свежей или живой, поэтому
+рестарт сцены краш не лечил (проверено на v1.0.2a.2). Гард: обёртка
+`PluginManager.callCommand` ловит ошибки команд `VisuMZ_1_BattleCore`
+`ActSeq_*` при `!$gameParty.inBattle()`, пишет в лог и возвращает `true` —
+остаток CE (свитчи, под-события, само исцеление) доигрывает нормально,
+как и задумано описанием навыка («Can be used outside of battle»).
 
 ## Использование навыков/ритуалов на карте
 
@@ -103,7 +107,8 @@ Effect` — идут по спрайтам боевых юнитов, `_baseX`) 
 3. Пригодность: friend-scope → `targets.some(testApply)`; opponent-scope →
    отказ (на карте нет ручного выбора врага); scope 0 → наличие любых
    эффектов (Warp: только CE 40 «домой», occasion 2 — работает через
-   `applyGlobal` → `$gameTemp.reserveCommonEvent` → рестарт Scene_Map).
+   `applyGlobal` → `$gameTemp.reserveCommonEvent` → CE доигрывает на живой
+   карте).
 4. `SoundManager.playUseSkill()` → общий `applyEntry` (трата MP через
    `useItem` → `paySkillCost`, эффекты, тост, CE, геймовер).
 
@@ -146,7 +151,8 @@ Ctrl в бою игнорируется (смена снаряжения в бо
   180`, `backgroundStyle Dim`, `windowskinTone {"Red":"0",…}`,
   `windowskin ""`; позиция центр-снизу (глобальные настройки CGMZ).
 - `$cgmzTemp.createNewToast` с
-  `lineOne = '\C[6]{префикс}\i[icon]{локализованное имя}\C[0]'`; перевод
+  `lineOne = '\C[0]{префикс}\C[6]\i[icon]{локализованное имя}\C[0]'` —
+  префикс белым (\c[0]), иконка и имя в цвете 6, как у игрового тоста; перевод
   имени — явный `window.Hendrix_Localization` (паттерн
   `loot_toasts.js:74`), `\i[n]` — стандартный код.
 - Префиксы «Used:» (предметы/навыки) и «Equipped:» (комплекты) — новые
@@ -156,7 +162,7 @@ Ctrl в бою игнорируется (смена снаряжения в бо
   Уже переведённая строка не является ключом словаря Hendrix → проходит
   через translateText без изменений.
 
-## HUD-панель в левом верхнем углу
+## HUD-панель в левом нижнем углу
 
 - Реализация — **спрайт** `WTE_HotkeyHudSprite` (PIXI Sprite + Bitmap:
   ручной blt иконок из IconSet и `bitmap.drawText`), а не окно: оконный
