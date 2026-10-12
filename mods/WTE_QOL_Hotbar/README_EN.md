@@ -14,8 +14,10 @@ number keys 1-9 and 0 — plus one-press equipment loadouts on Ctrl+digit.
   messages or events), **or in battle** during the current hero's input —
   it consumes the turn, skills pay MP, exactly like choosing from the menu.
   A skill can only be used by an actor who knows it (same as the menu).
-- **A center-bottom toast announces every use** — "Used: <item>", same look
-  as the world item-pickup toast, in every language the game ships.
+- **A center-bottom toast announces every field use** — "Used: <item>", same
+  look as the world item-pickup toast, in every language the game ships. In
+  battle nothing extra is printed — the engine announces the action itself
+  when the turn executes.
 - **HUD bar** (bottom-left of the screen): each bound slot shows its icon,
   the inventory count at the icon's corner and the key digit underneath.
   Out-of-stock items and skills you cannot currently cast (no MP, not
@@ -61,7 +63,6 @@ plugin manager):
 | Setting | Default | What it does |
 |---|---|---|
 | `SLOT_KEYS` | `['1'…'9','0']` | the ten slot keys |
-| `LOADOUT_MODIFIER` | `'control'` | held modifier for equipment loadouts |
 | `EXTRA_ITEM_IDS` | `[2043]` | item ids bindable despite "menu-only" (Cup of Coffee). Empty for strict game rules |
 | `TOAST.WIDTH` / `TOAST.DISPLAY_TIME` | `360` / `180` | toast width and display time |
 | `HUD.LEFT` / `HUD.BOTTOM` | `8` / `8` | hotbar position (bottom-left corner) |

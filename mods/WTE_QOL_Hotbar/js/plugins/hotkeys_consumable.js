@@ -22,9 +22,11 @@
  *   Field: press the digit while the player has free control. Battle: press
  *   the digit while the current actor is awaiting a command — the entry
  *   becomes that actor's action and consumes the turn (skills pay MP).
- *   The engine performs everything, so behavior matches menu usage; a
- *   center-bottom toast (same look as the world item-pickup toast)
- *   announces each use. Skills can only be used by an actor who knows them.
+ *   The engine performs everything, so behavior matches menu usage. On the
+ *   field a center-bottom toast (same look as the world item-pickup toast)
+ *   announces each use; in battle nothing extra is printed — the engine
+ *   announces the action itself when it executes. Skills can only be used
+ *   by an actor who knows them.
  *
  * Equipment loadouts (plugin WTE_EquipmentLoadouts):
  *   Ctrl + digit on the field applies equipment loadout N (the same logic
@@ -34,9 +36,10 @@
  * HUD:
  *   A frameless bar in the bottom-left screen corner shows each bound slot:
  *   icon, inventory count at the icon's bottom-right (items only) and the
- *   hotkey digit centered under the icon. Out-of-stock items and
- *   unaffordable/unknown skills show greyed. Slots without a binding are
- *   not drawn. The bar follows the global HUD visibility switch.
+ *   hotkey digit centered under the icon. Out-of-stock items, items whose
+ *   effect would not apply right now (full HP/MP) and unaffordable/unknown
+ *   skills show greyed — same greying as the field menu. Slots without a
+ *   binding are not drawn. The bar follows the global HUD visibility switch.
  *
  * Toasts are prefixed with a localized "Used:" / "Equipped:" string for
  * every language the game ships; the item/skill/loadout name itself is
@@ -65,8 +68,6 @@
     const CONFIG = {
         SLOT_KEYS: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
         SYSTEM_FIELD: '_wteConsumableHotkeys',
-        // Held modifier for equipment loadouts (Input button name).
-        LOADOUT_MODIFIER: 'control',
         // Item ids that may be bound even when the game marks them menu-only
         // (occasion 2). Their hotkey use works like menu use on the field.
         // NOTE: the field menu itself greys such items out; whitelisting them
@@ -109,6 +110,60 @@
         Input.keyMapper[i === 9 ? 48 : 49 + i] = key; // 1-9 = 49-57, 0 = 48
     });
 
+    // Raw digit-key tracking. Input.keyMapper is unreliable here: it is
+    // rebuilt at runtime by other plugins (Hendrix_Keyboard_Gamepad.
+    // remapKeys wipes and recreates it, the devs' KeymapperEdits replaces it
+    // wholesale), and the game's control config can remap a digit key onto
+    // another button entirely (a real install had 9 = 'control' turn-in-
+    // place, so the digit never existed for Input). Digit presses are
+    // therefore tracked straight from DOM key events. Trigger semantics
+    // mirror vanilla (fresh press only, OS key repeat ignored) with ZERO
+    // frame-rate coupling: a press is consumable by the next hook that asks
+    // and expires after a short staleness window — so a digit tapped during
+    // a dialogue never fires late when control returns. keyup deliberately
+    // does NOT drop a pending press: keyboard macro software can release the
+    // key within the same millisecond, and such a tap must still count.
+    const PRESS_TTL_MS = 250;
+    const keyHeld = new Array(SLOT_COUNT).fill(false);
+    const pendingAt = new Array(SLOT_COUNT).fill(0); // ms timestamp, 0 = none
+
+    const keyCodeToSlot = (keyCode) => {
+        if (keyCode >= 49 && keyCode <= 57) return keyCode - 49; // 1-9
+        if (keyCode === 48) return 9; // 0
+        return -1;
+    };
+
+    document.addEventListener('keydown', (event) => {
+        const slot = keyCodeToSlot(event.keyCode);
+        if (slot < 0 || keyHeld[slot]) return;
+        keyHeld[slot] = true;
+        pendingAt[slot] = performance.now();
+    }, true);
+
+    document.addEventListener('keyup', (event) => {
+        const slot = keyCodeToSlot(event.keyCode);
+        if (slot < 0) return;
+        keyHeld[slot] = false;
+    }, true);
+
+    // Physical Ctrl state, tracked from DOM modifier flags. Input.isPressed
+    // ('control') is unreliable here: the game's control config can remap a
+    // digit key onto the 'control' button (a real install had 9 = turn-in-
+    // place), which made every press of that digit look like Ctrl+digit and
+    // routed it to loadouts. The DOM ctrlKey flag cannot be remapped.
+    let rawCtrlHeld = false;
+    const trackModifiers = (event) => { rawCtrlHeld = event.ctrlKey; };
+    document.addEventListener('keydown', trackModifiers, true);
+    document.addEventListener('keyup', trackModifiers, true);
+    window.addEventListener('blur', () => { rawCtrlHeld = false; });
+
+    function hotkeyTriggered(index) {
+        const at = pendingAt[index];
+        if (!at) return false;
+        pendingAt[index] = 0; // consume — one press, one reaction
+        return performance.now() - at <= PRESS_TTL_MS;
+    }
+
     // ==========================================================================
     // Logging. Operational events (binds, uses, refusals with reasons,
     // loadouts, errors with stacks) are ALWAYS written — that is what makes
@@ -117,7 +172,7 @@
     // and is truncated once it grows past 1 MiB.
     // ==========================================================================
 
-    const MOD_VERSION = '1.0.2a.3';
+    const MOD_VERSION = '1.0.2a.4';
 
     const LOG_PATH = (() => {
         try {
@@ -290,9 +345,9 @@
         alias_Scene_Item_update.call(this);
         try {
             if (!this._itemWindow || !this._itemWindow.active) return;
-            if (Input.isPressed(CONFIG.LOADOUT_MODIFIER)) return; // Ctrl+digit = loadouts, not binds
+            if (rawCtrlHeld) return; // Ctrl+digit = loadouts, not binds
             for (let i = 0; i < SLOT_COUNT; i++) {
-                if (Input.isTriggered(CONFIG.SLOT_KEYS[i])) {
+                if (hotkeyTriggered(i)) {
                     const item = this._itemWindow.item();
                     if (!item) return;
                     if (!isBindable(item)) {
@@ -319,9 +374,9 @@
         alias_Scene_Skill_update.call(this);
         try {
             if (!this._itemWindow || !this._itemWindow.active) return;
-            if (Input.isPressed(CONFIG.LOADOUT_MODIFIER)) return; // Ctrl+digit = loadouts, not binds
+            if (rawCtrlHeld) return; // Ctrl+digit = loadouts, not binds
             for (let i = 0; i < SLOT_COUNT; i++) {
-                if (Input.isTriggered(CONFIG.SLOT_KEYS[i])) {
+                if (hotkeyTriggered(i)) {
                     const skill = this._itemWindow.item();
                     if (!skill) return;
                     if (!isSkillBindable(skill)) {
@@ -663,9 +718,9 @@
             if (this._wteHotkeyHud) this._wteHotkeyHud.updateHud();
             if (suppressEquipGabs > 0) suppressEquipGabs--;
             if (!$gamePlayer.canMove()) return; // no hotkeys during messages/events
-            if (Input.isPressed(CONFIG.LOADOUT_MODIFIER)) {
+            if (rawCtrlHeld) {
                 for (let i = 0; i < SLOT_COUNT; i++) {
-                    if (Input.isTriggered(CONFIG.SLOT_KEYS[i])) {
+                    if (hotkeyTriggered(i)) {
                         applyLoadout(i);
                         return;
                     }
@@ -673,7 +728,7 @@
                 return; // modifier held: digits mean loadouts, not consumption
             }
             for (let i = 0; i < SLOT_COUNT; i++) {
-                if (Input.isTriggered(CONFIG.SLOT_KEYS[i])) {
+                if (hotkeyTriggered(i)) {
                     const entry = slotEntry(i);
                     if (!entry) return;
                     if (entry.t === 'skill') useSkillOnMap(slotObject(i));
@@ -709,8 +764,10 @@
         action.setItem(item.id);
         $gameParty.setLastItem(item);
         if (!pickTarget(action, actor)) return; // already buzzed, action cleared
+        // No extra battle-log line: the engine already announces the item
+        // itself when the action executes (icon+name line, then the item's
+        // own message1 "You use X!"), same as it does for skills.
         SoundManager.playOk();
-        showUseToast(item);
         logEvent(`used in battle: ${item.name} (#${item.id}) by ${actor.name()}`);
         SceneManager._scene.selectNextCommand();
     }
@@ -733,8 +790,9 @@
         action.setSkill(skill.id);
         $gameParty.setLastItem(skill);
         if (!pickTarget(action, actor)) return; // already buzzed, action cleared
+        // No extra toast for skills/rituals: the engine already prints the
+        // skill name in the battle log when the action executes.
         SoundManager.playOk();
-        showUseToast(skill);
         logEvent(`used in battle: ${skill.name} (#${skill.id}) by ${actor.name()}`);
         SceneManager._scene.selectNextCommand();
     }
@@ -742,7 +800,7 @@
     // Same choice Scene_Battle.onSelectAction would ask for, made
     // automatically: opponents -> first alive enemy, one ally -> the actor.
     function pickTarget(action, actor) {
-        if (!action.needsSelection()) return;
+        if (!action.needsSelection()) return true; // e.g. scope "the user"
         if (action.isForOpponent()) {
             const target = $gameTroop.aliveMembers()[0];
             if (!target) {
@@ -769,9 +827,9 @@
             // A fresh inputting action has no item yet; once a skill/item is
             // chosen (target selection open) the digits must not hijack it.
             if (!action || action.item()) return;
-            if (Input.isPressed(CONFIG.LOADOUT_MODIFIER)) return; // no equip swaps in battle
+            if (rawCtrlHeld) return; // no equip swaps in battle
             for (let i = 0; i < SLOT_COUNT; i++) {
-                if (Input.isTriggered(CONFIG.SLOT_KEYS[i])) {
+                if (hotkeyTriggered(i)) {
                     const entry = slotEntry(i);
                     if (!entry) return;
                     if (entry.t === 'skill') useSkillInBattle(slotObject(i), actor, action);
@@ -824,9 +882,23 @@
     // clock (windowLayer positioning proved unreliable in this build).
     // ==========================================================================
 
+    // Mirrors the field-menu grey-out: an item whose effects would not apply
+    // right now (full HP/MP, state already active) is unusable there, so the
+    // HUD greys it too — otherwise a refusal looks like a dead hotkey.
+    function itemApplicable(item) {
+        const user = hotkeyUser();
+        if (!user || !item) return false;
+        const action = new Game_Action(user);
+        action.setItemObject(item);
+        return action.isForFriend() &&
+            targetsForAction(action, user).some(t => action.testApply(t));
+    }
+
     function slotStateSig(entry) {
         if (entry.t === 'item') {
-            return String($gameParty.numItems($dataItems[entry.id]));
+            const item = $dataItems[entry.id];
+            const usable = item && itemApplicable(item) ? 1 : 0;
+            return `${$gameParty.numItems(item)}:${usable}`;
         }
         const user = $gameParty.menuActor();
         return (user && user.hasSkill(entry.id) && user.canUse($dataSkills[entry.id])) ? '1' : '0';
@@ -904,7 +976,7 @@
             const iconY = 2;
             let enabled = true;
             if (entry.t === 'item') {
-                enabled = $gameParty.numItems(obj) > 0;
+                enabled = $gameParty.numItems(obj) > 0 && itemApplicable(obj);
             } else {
                 const user = $gameParty.menuActor();
                 enabled = !!(user && user.hasSkill(obj.id) && user.canUse(obj));
@@ -952,6 +1024,6 @@
 
     logEvent(`mod v${MOD_VERSION} loaded`,
         `| slots=${SLOT_COUNT} keys=${CONFIG.SLOT_KEYS.join('')}`,
-        `| modifier=${CONFIG.LOADOUT_MODIFIER} extraItemIds=[${CONFIG.EXTRA_ITEM_IDS}]`,
+        `| modifier=ctrl(raw) extraItemIds=[${CONFIG.EXTRA_ITEM_IDS.join(',')}]`,
         `| debug=${CONFIG.DEBUG} log=${LOG_PATH || 'unavailable'}`);
 })();

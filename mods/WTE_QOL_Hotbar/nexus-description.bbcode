@@ -3,14 +3,14 @@ Ten quick-use slots for items, skills and rituals on keys 1-0, plus one-press eq
 
 FULL DESCRIPTION (Nexus "Description" field, BBCode):
 [color=#f6b26b][size=4][b]Description[/b][/size][/color]
-[color=#D4D4D8]Ever wanted to eat food, drink coffee or heal without digging through the inventory in the middle of a dungeon? This mod adds a ten-slot quick-use hotbar to Welcome to Elderfield: bind consumable items, skills and rituals to the number keys 1-9 and 0, use them on the field or in battle, swap entire equipment loadouts with Ctrl+digit - and see every action announced by a toast, in every language the game supports.[/color]
+[color=#D4D4D8]Ever wanted to eat food, drink coffee or heal without digging through the inventory in the middle of a dungeon? This mod adds a ten-slot quick-use hotbar to Welcome to Elderfield: bind consumable items, skills and rituals to the number keys 1-9 and 0, use them on the field or in battle, and swap entire equipment loadouts with Ctrl+digit.[/color]
 
 [b][color=#f6b26b][size=4]Main features[/size][/color][/b]
 [list]
 [*][color=#D4D4D8]Ten slots on keys 1-9 and 0. Hover an item in the inventory (or a skill/ritual in the skill menu) and press a key to bind it; press the same key again to unbind. Binding another entry moves the binding. Bound entries show their key digit right on the icon.[/color][/*]
 [*][color=#D4D4D8]Use on the field while you have free control, or in battle during the current hero's input - it consumes the turn, skills pay MP, exactly like choosing from the menu. A skill can only be used by a hero who knows it.[/color][/*]
-[*][color=#D4D4D8]A center-bottom toast announces every use ("Used: ...") with the same look as the world item-pickup toast.[/color][/*]
-[*][color=#D4D4D8]HUD bar in the bottom-left corner: icon, inventory count at the icon's corner and the key digit underneath. Out-of-stock items and skills you cannot cast right now (no MP, not learned) show greyed.[/color][/*]
+[*][color=#D4D4D8]A center-bottom toast announces every field use ("Used: ...") with the same look as the world item-pickup toast. In battle nothing extra is printed - the engine announces the action itself when the turn executes.[/color][/*]
+[*][color=#D4D4D8]HUD bar in the bottom-left corner: icon, inventory count at the icon's corner and the key digit underneath. Entries show greyed exactly when the field menu would grey them: out of stock, effect would not apply right now (full HP/MP), not enough MP, skill not learned.[/color][/*]
 [*][color=#D4D4D8]Equipment loadouts on Ctrl+digit: swap the whole setup of the current hero in one press - with a toast naming the equipped set.[/color][/*]
 [*][color=#D4D4D8]Bindings are stored in your savegames.[/color][/*]
 [/list]
@@ -34,7 +34,7 @@ FULL DESCRIPTION (Nexus "Description" field, BBCode):
 [color=#d4d4d8]Delete the [/color][i][font=Courier New][color=#d4d4d8]WTE_QOL_Hotbar[/color][/font][/i][color=#d4d4d8] folder from [/color][i][font=Courier New][color=#d4d4d8]mods\[/color][/font][/i][color=#d4d4d8] (or rename it to [/color][i][font=Courier New][color=#d4d4d8]!WTE_QOL_Hotbar[/color][/font][/i][color=#d4d4d8] to temporarily disable).[/color]
 
 [b][color=#f6b26b][size=4]Configuration[/size][/color][/b]
-[color=#D4D4D8]All settings live in the CONFIG object at the top of [i][font=Courier New]js\plugins\hotkeys_consumable.js[/font][/i] inside the mod folder: hotbar position and geometry, toast width/duration, the modifier key for loadouts, and EXTRA_ITEM_IDS - a whitelist that already lets you bind the Cup of Coffee, a menu-only item the game normally refuses outside the menu.[/color]
+[color=#D4D4D8]All settings live in the CONFIG object at the top of [i][font=Courier New]js\plugins\hotkeys_consumable.js[/font][/i] inside the mod folder: hotbar position and geometry, toast width/duration, and EXTRA_ITEM_IDS - a whitelist that already lets you bind the Cup of Coffee, a menu-only item the game normally refuses outside the menu.[/color]
 
 [b][color=#f6b26b][size=4]Troubleshooting[/size][/color][/b]
 [color=#D4D4D8]The mod always writes a log to [i][font=Courier New]mods\WTE_QOL_Hotbar\logs\hotkeys_consumable.log[/font][/i]. If anything misbehaves, attach that file to your bug report - it records the mod version, every bind and use, every equipped loadout, every refusal with its reason, and any game errors.[/color]
