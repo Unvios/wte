@@ -12,8 +12,9 @@
  *   entry to unbind; binding a different entry moves the binding (the old
  *   one is unbound). Items keep the vanilla field rules (key items,
  *   menu-only and dead-ally-target items are refused; menu-only items can
- *   be whitelisted via CONFIG.EXTRA_ITEM_IDS — Cup of Coffee 2043 is by
- *   default). Skills need a real skill type (Ritual/Skill), must not be
+ *   be whitelisted via CONFIG.EXTRA_ITEM_IDS — by default: Cup of Coffee,
+ *   the sixteen buff potions, and the scope-less containers/dice (coin
+ *   pouches, gem bags, caskets, dice, Stealth Musk, Extra Pouch). Skills need a real skill type (Ritual/Skill), must not be
  *   "never", and must not target dead allies; scope-less common-event
  *   rituals (Warp) are allowed. Bound entries show their slot digit at the
  *   icon's top-right corner in the lists.
@@ -72,9 +73,26 @@
         // (occasion 2). Their hotkey use works like menu use on the field.
         // NOTE: the field menu itself greys such items out; whitelisting them
         // here deliberately deviates from that for the hotkey path only.
-        // 2043 = Cup of Coffee (the game ships it as menu-only; battle use
-        // stays forbidden for it exactly like the vanilla battle menu).
-        EXTRA_ITEM_IDS: [2043],
+        // Three groups:
+        //   2043              = Cup of Coffee (buff drink)
+        //   150-156, 2172-2173, 2224-2229 = buff potions (user scope, same
+        //                       shape as coffee: variable + state + message)
+        //   30, 73, 79-81, 93-96, 2132, 2190-2191, 2230, 2236 = scope-less
+        //                       containers/dice/musk (coin pouches, gem bags,
+        //                       caskets, Lucky/Crimson/Cursed Die, Stealth
+        //                       Musk, Extra Pouch) — pure common-event items,
+        //                       used without a target like the Warp ritual.
+        //   105, 166, 957, 2041, 2070 = utility CE items (Rain Gem, Bait
+        //                       Packs, Lesser Rune of Growth, Recall Potion).
+        // Battle use stays forbidden for all of them exactly like the
+        // vanilla battle menu.
+        EXTRA_ITEM_IDS: [
+            2043,
+            150, 151, 152, 153, 154, 155, 156, 2172, 2173,
+            2224, 2225, 2226, 2227, 2228, 2229,
+            30, 73, 79, 80, 81, 93, 94, 95, 96, 2132, 2190, 2191, 2230, 2236,
+            105, 166, 957, 2041, 2070,
+        ],
         // Mirrors the world item-pickup toast (data/CommonEvents.json, CE 2838).
         TOAST: {
             WIDTH: 360,
@@ -172,7 +190,7 @@
     // and is truncated once it grows past 1 MiB.
     // ==========================================================================
 
-    const MOD_VERSION = '1.0.2a.4';
+    const MOD_VERSION = '1.0.2a.5';
 
     const LOG_PATH = (() => {
         try {
@@ -545,9 +563,12 @@
         const action = new Game_Action(user);
         action.setItemObject(item);
         const targets = targetsForAction(action, user);
+        const whitelisted = CONFIG.EXTRA_ITEM_IDS.includes(item.id);
         const usable = user.canMove() && $gameParty.hasItem(item) &&
-            occasionOkForHotkey(item) && action.isForFriend() &&
-            targets.some(target => action.testApply(target));
+            occasionOkForHotkey(item) &&
+            (action.isForFriend()
+                ? targets.some(target => action.testApply(target))
+                : whitelisted && item.effects.length > 0); // scope-less containers/dice: CE-only, like the Warp ritual
         if (!usable) {
             SoundManager.playBuzzer();
             logEvent(`map use refused: ${item.name} (#${item.id})`,
@@ -618,6 +639,17 @@
             }
         }
         action.applyGlobal();
+        // The game appends CE 313 ("Inv Open": SceneManager.push(Scene_Item))
+        // to its menu-only items so using one from the menu returns the
+        // player to the inventory. From the hotbar that would yank the
+        // player into the menu after every field use — strip it from the
+        // reservation queue. Hotkey path only; menu use keeps vanilla flow.
+        const ceQueue = $gameTemp._commonEventQueue;
+        if (Array.isArray(ceQueue) && ceQueue.includes(313)) {
+            let i;
+            while ((i = ceQueue.indexOf(313)) >= 0) ceQueue.splice(i, 1);
+            log('stripped CE 313 (Inv Open) from the reservation queue');
+        }
         showUseToast(obj);
         const left = DataManager.isItem(obj) ? `, left: ${$gameParty.numItems(obj)}` : '';
         logEvent(`used on map: ${obj.name} (#${obj.id})${left}`,
@@ -890,8 +922,11 @@
         if (!user || !item) return false;
         const action = new Game_Action(user);
         action.setItemObject(item);
-        return action.isForFriend() &&
-            targetsForAction(action, user).some(t => action.testApply(t));
+        if (!action.isForFriend()) {
+            // scope-less whitelisted items (containers/dice) — CE-only
+            return CONFIG.EXTRA_ITEM_IDS.includes(item.id) && item.effects.length > 0;
+        }
+        return targetsForAction(action, user).some(t => action.testApply(t));
     }
 
     function slotStateSig(entry) {

@@ -53,8 +53,19 @@
   (`playCancel`); иначе записать и вычистить дубли по всем слотам.
   После — `_itemWindow.refresh()` (значок виден сразу).
 - `isBindable(item)`: `itypeId === 1` (не ключевой) && occasion 0|1 (или
-  `CONFIG.EXTRA_ITEM_IDS` — белый список menu-only; дефолт `[2043]` = Cup
-  of Coffee) && scope ∉ {9,10,12} (мёртвые союзники — только ручной выбор).
+  `CONFIG.EXTRA_ITEM_IDS` — белый список menu-only; дефолт: Cup of Coffee
+  #2043, 16 бафф-зелий #150-156/#2172-2173/#2224-2229, scope-0 контейнеры и
+  кости #30, #73, #79-81, #93-96, #2132, #2190-2191, #2230, #2236, utility
+  #105, #166, #957, #2041, #2070 (Rain Gem, Bait Pack t1/t2, Lesser Rune of
+  Growth, Recall Potion)) && scope ∉ {9,10,12} (мёртвые союзники — только
+  ручной выбор). Для scope-0 whitelist-предметов использование идёт по пути
+  CE-only (как Warp): без цели и без testApply, гейт — `effects.length > 0`.
+- Почти все menu-only предметы игры несут вторым эффектом CE 313 «Inv Open»
+  (`SceneManager.push(Scene_Item)`) — чтобы из меню игрок остался в
+  инвентаре. С хоткея это выдёргивало бы в меню после каждого использования,
+  поэтому `applyEntry` вырезает 313 из `$gameTemp._commonEventQueue` (FIFO,
+  `retrieveCommonEvent` = shift) после `applyGlobal`. Только наш путь — из
+  меню предметы переоткрывают инвентарь как раньше.
 - `isSkillBindable(skill)`: `DataManager.isSkill` && occasion ≠ 3 &&
   scope ∉ {9,10,12} && именованный тип (`$dataSystem.skillTypes[stypeId]`
   непуст — пустые типы это пассивы/заглушки; в игре типы:

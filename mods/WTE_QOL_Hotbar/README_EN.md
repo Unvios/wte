@@ -63,7 +63,7 @@ plugin manager):
 | Setting | Default | What it does |
 |---|---|---|
 | `SLOT_KEYS` | `['1'…'9','0']` | the ten slot keys |
-| `EXTRA_ITEM_IDS` | `[2043]` | item ids bindable despite "menu-only" (Cup of Coffee). Empty for strict game rules |
+| `EXTRA_ITEM_IDS` | `[2043,150-156,...]` | item ids bindable despite "menu-only" (Cup of Coffee, buff potions, pouches/dice). Empty for strict game rules |
 | `TOAST.WIDTH` / `TOAST.DISPLAY_TIME` | `360` / `180` | toast width and display time |
 | `HUD.LEFT` / `HUD.BOTTOM` | `8` / `8` | hotbar position (bottom-left corner) |
 | `HUD.SLOT_WIDTH` / `HUD.HEIGHT` | `40` / `52` | hotbar geometry |
