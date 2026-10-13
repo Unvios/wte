@@ -145,7 +145,7 @@ PAYLOAD=$(TITLE="$TITLE" TAG="$TAG" NOTES="$NOTES" PRE="$PRERELEASE" perl -MJSON
     });
 ')
 
-REL_ID=$(curl -s -H "$AUTH" "$API/releases/tags/$TAG" | perl -ne 'print $1 if /"id":\s*(\d+)/' | head -1)
+REL_ID=$(curl -s -H "$AUTH" "$API/releases/tags/$TAG" | perl -ne 'if (/"id":\s*(\d+)/) { print "$1\n"; exit; }')
 if [ -n "$REL_ID" ]; then
     echo "==> release for $TAG already exists (id $REL_ID), updating body"
     curl -s -X PATCH -H "$AUTH" -H "Content-Type: application/json" \
@@ -153,7 +153,7 @@ if [ -n "$REL_ID" ]; then
 else
     RESP=$(curl -s -X POST -H "$AUTH" -H "Content-Type: application/json" \
         -d "$PAYLOAD" "$API/releases")
-    REL_ID=$(printf '%s' "$RESP" | perl -ne 'print $1 if /"id":\s*(\d+)/' | head -1)
+    REL_ID=$(printf '%s' "$RESP" | perl -ne 'if (/"id":\s*(\d+)/) { print "$1\n"; exit; }')
     [ -n "$REL_ID" ] || die "release creation failed: $(printf '%s' "$RESP" | head -c 300)"
     echo "==> release created (id $REL_ID)"
 fi
