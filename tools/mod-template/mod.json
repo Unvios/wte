@@ -1,0 +1,7 @@
+{
+  "name": "WTE QOL Template",
+  "author": "Unvios",
+  "version": "1.0.2a.1",
+  "description": "One paragraph: what the mod does, what the player sees, what it deliberately does NOT do. Bindings/state persistence and 'no game files edited' are worth stating here.",
+  "priority": 10
+}
