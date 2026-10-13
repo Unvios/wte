@@ -2,6 +2,10 @@
 
 Versioning: `<game version>.<mod revision>`.
 
+## 1.0.2a.2
+
+- Fixed the Deposit All hotkey (E/B) stealing the menu selection: after the transfer the focus now returns to the window that was active before (the category bar by default) instead of jumping to the "Deposit All" button, and no phantom cursors are left on several windows at once.
+
 ## 1.0.2a.1
 
 - Initial public release: pin items in the party inventory (hover + P, works in the chest scene and the regular item menu) so the chest scene's "Deposit All" leaves them in your inventory.

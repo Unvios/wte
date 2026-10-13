@@ -61,7 +61,7 @@
     // <game>/mods/WTE_QOL_Deposit/logs/ and is truncated past 1 MiB.
     // ==========================================================================
 
-    const MOD_VERSION = '1.0.2a.1';
+    const MOD_VERSION = '1.0.2a.2';
 
     const LOG_PATH = (() => {
         try {
@@ -242,17 +242,30 @@
             logEvent('deposit hotkey refused: onDepositAllOk missing (DM_ContainerUI_Cleanup absent?)');
             return;
         }
+        // Capture the focus owner before the transfer; onDepositAllOk
+        // overwrites it at the end.
+        const focusWindows = [scene._categoryWindow, scene._sortModeWindow,
+            scene._depositAllWindow, scene._containerWindow, scene._itemWindow].filter(Boolean);
+        const prevActive = focusWindows.find(w => w.active) || null;
+        const prevIndex = prevActive && typeof prevActive.index === 'function' ? prevActive.index() : -1;
         scene.onDepositAllOk(); // skips pinned items via the wrapper above
-        // onDepositAllOk leaves focus on the Deposit All button (that is what
-        // a mouse click needs); for the keyboard flow put the cursor back
-        // into the party list instead.
-        const win = scene._itemWindow;
+        // onDepositAllOk always ends by activating the Deposit All button
+        // (that is what a mouse click needs). For the keyboard flow that
+        // steals navigation from wherever the player was — and stacked on
+        // top of the still-active previous window it leaves several cursors
+        // visible at once. Restore focus to the window that was active
+        // before the transfer (category bar by default), deactivating
+        // everything else.
+        const win = prevActive && prevActive.parent ? prevActive : scene._itemWindow;
+        focusWindows.forEach(w => { if (w && w !== win) w.deactivate(); });
         if (win) {
             win.activate();
-            const max = win.maxItems();
+            const max = typeof win.maxItems === 'function' ? win.maxItems() : 0;
             if (max > 0) {
-                if (win.index() < 0) win.select(0);
-                else if (win.index() >= max) win.select(max - 1);
+                let idx = prevActive === win ? prevIndex : win.index();
+                if (idx < 0) idx = 0;
+                else if (idx >= max) idx = max - 1;
+                win.select(idx);
             } else {
                 win.deselect();
             }

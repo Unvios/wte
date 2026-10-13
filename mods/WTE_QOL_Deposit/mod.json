@@ -1,7 +1,7 @@
 {
   "name": "WTE QOL Deposit Pins",
   "author": "Unvios",
-  "version": "1.0.2a.1",
+  "version": "1.0.2a.2",
   "description": "Pin items in the party inventory so the chest scene's Deposit All button skips them. Hover an item and press P to toggle the pin (works both in the container scene and in the regular item menu); pinned entries show a P badge at the icon's top-left corner. Pins cover the whole stack of an item kind (items, weapons and armors are tracked separately), block only the bulk Deposit All transfer - single manual deposits are unaffected - and persist through save/load. Bonus: in the container scene the game's Inventory button (E/B by default, follows the Button Config binding) triggers Deposit All without the mouse. No data files are edited; disabling the mod reverts everything.",
   "priority": 10
 }
