@@ -12,5 +12,8 @@ mods/WTE_QOL_Hotbar/logs/
 !/docs/
 
 !/tools/
+/tools/nwjs-sdk/
+/tools/e2e/artifacts/
+/tools/e2e/sandbox/
 
 dist/
