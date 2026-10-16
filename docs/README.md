@@ -9,6 +9,8 @@
 - [loot-toasts.md](loot-toasts.md) — лут после боя: цепочка CE 27 → лут-таблицы, почему сообщения блокируют управление и как это перехватывается тостами.
 - [hotkeys-consumable.md](hotkeys-consumable.md) — хоткеи 1–0 для предметов, навыков и ритуалов: биндинг в меню, использование через штатные флоу движка, Ctrl+цифра для комплектов снаряжения, тосты, HUD-панель.
 - [localization.md](localization.md) — Hendrix Localization: где словарь, как проходит перевод текста и как модам править строки на всех языках.
+- [e2e-testing.md](e2e-testing.md) — E2E-харнес (CDP поверх NW.js SDK): запуск, API тулкита, рецепты.
+- [e2e-hotbar-testplan.md](e2e-hotbar-testplan.md) — каталог e2e-кейсов мода WTE_QOL_Hotbar с раскладкой по сценариям.
 
 ## Базовые факты
 

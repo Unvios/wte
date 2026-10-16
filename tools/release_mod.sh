@@ -60,16 +60,14 @@ ls "$MOD_DIR"/js/plugins/*.js >/dev/null 2>&1 || die "no plugins in $MOD_DIR/js/
 PLUGIN_VER=$(sed -n "s/.*MOD_VERSION *= *'\([^']*\)'.*/\1/p" "$MOD_DIR"/js/plugins/*.js | sort -u)
 [ "$PLUGIN_VER" = "$VERSION" ] || die "version mismatch: mod.json=$VERSION, MOD_VERSION=$PLUGIN_VER"
 
+NODE=$(command -v node || true)
+[ -n "$NODE" ] && [ -x "$NODE" ] || NODE=/d/programs/nodejs/node.exe
 for f in "$MOD_DIR"/js/plugins/*.js; do
-    perl -0777 -ne '
-        s{/\*.*?\*/}{}gs;
-        s{//[^\n]*}{}g;
-        s{"(?:[^"\\]|\\.)*"}{}gs;
-        s{\x27(?:[^\x27\\]|\\.)*\x27}{}gs;
-        s{`(?:[^`\\]|\\.)*`}{}gs;
-        my $o = () = /[{(\[]/g; my $c = () = /[})\]]/g;
-        exit($o == $c ? 0 : 1);
-    ' "$f" || die "bracket mismatch in $f"
+    if [ -x "$NODE" ] || command -v "$NODE" >/dev/null 2>&1; then
+        "$NODE" --check "$f" || die "syntax error in $f"
+    else
+        perl tools/balcheck.pl < "$f" | grep -q '^OK$' || die "bracket mismatch in $f"
+    fi
 done
 
 [ -f "$MOD_DIR/CHANGELOG.md" ] || die "$MOD_DIR/CHANGELOG.md not found"

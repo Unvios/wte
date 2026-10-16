@@ -120,13 +120,22 @@ for (let i = 0; i <= 9; i++) {
   KEYS[String(i)] = { windowsVirtualKeyCode: 48 + i, key: String(i), code: 'Digit' + i, text: String(i) };
 }
 
-export async function pressKey(cdp, name, { holdMs = 60 } = {}) {
+export async function pressKey(cdp, name, { holdMs = 60, ctrl = false } = {}) {
   const def = KEYS[name.toLowerCase()];
   if (!def) throw new CdpError(`Unknown key: ${name}`);
   const base = { ...def, nativeVirtualKeyCode: def.windowsVirtualKeyCode };
-  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base });
+  const mods = ctrl ? 2 : 0; // CDP modifier bitmask: Ctrl = 2
+  if (ctrl) {
+    const c = KEYS.control;
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', ...c, nativeVirtualKeyCode: c.windowsVirtualKeyCode, modifiers: 2 });
+  }
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, modifiers: mods });
   await new Promise((r) => setTimeout(r, holdMs));
-  await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base, modifiers: mods });
+  if (ctrl) {
+    const c = KEYS.control;
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...c, nativeVirtualKeyCode: c.windowsVirtualKeyCode, modifiers: 0 });
+  }
 }
 
 export async function evaluate(cdp, expression, { timeoutMs = 30000 } = {}) {

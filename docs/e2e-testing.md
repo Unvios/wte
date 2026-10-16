@@ -30,6 +30,8 @@ Headless-режим (`--headless`) гоняет игру без видимого
 
 Артефакты каждого прогона: `tools/e2e/artifacts/<сценарий>-<timestamp>/` — `console.log` (вся консоль игры, включая `[Mod Loader]` и логи модов), скриншоты `*.png`, при падении — `FAIL.png`. Каталог вне git.
 
+Пачка сценариев одной командой: `tools/e2e/run_suite.sh hotbar` (все `tools/e2e/scenarios/hotbar-*.mjs` последовательно в `--sandbox --headless`, сводка PASS/FAIL; паттерн и флаги параметризуются).
+
 ## Сценарии
 
 Сценарий — ES-модуль с дефолтным экспортом async-функции, принимающей тулкит `t`:
@@ -57,9 +59,25 @@ API тулкита:
 - `t.consoleText()` — вся захваченная консоль игры одной строкой (удобно искать логи модов: `t.assert(t.consoleText().includes('[CoffeeDuration]'), ...)`).
 - `t.artifactsDir`, `t.gameRoot` — пути, если сценарию нужно писать свои файлы или читать файлы игры.
 
+## Покрытие модов тестами (стандарт)
+
+Для каждого своего мода сначала пишется документ с тест-кейсами, потом сценарии. Эталон: `docs/e2e-hotbar-testplan.md` + пачка `tools/e2e/scenarios/hotbar-*.mjs`.
+
+- Тест-план кладётся в `docs/e2e-<mod>-testplan.md`: цель/подход, таблица тестовых данных с конкретными id (сверить по `data/*.json` ДО написания кейсов — имена/occasion/scope/эффекты), каталог кейсов с ID по областям (`<MOD>-B-xx` биндинг, `F` поле, `BT` бой, …), раскладка кейсов по файлам сценариев, список того, что сознательно не автоматизируем.
+- Уровни проверок по нарастанию стоимости — берём самый дешёвый, который ловит баг: 1) состояние игры через `t.eval` (`$gameSystem`, `$gameParty`, `BattleManager`, окна сцен); 2) свежие строки мод-лога (`logMark`/`freshLogLines` — события и причины отказов с деталями); 3) структурная геометрия окон (x/y/w/h/opacity/visible); 4) пиксели bitmap'ов (`toastVisual`/`badgeInk`/`hudPixels` — рендерер не участвует). Скриншоты — артефакты для ручного разбора падений; golden images не используем (дорого, флакает).
+- Сетап всегда программный: `gainItem`/`learnSkill`/`setSlots`/прямая запись в `$gameSystem`. Реальные клавиши (`t.key`, `pressDigit`, `pressCtrlDigit`) — только там, где тестируем сам ввод или UI-хук.
+- Ветки отказов, для которых в живой БД нет данных (scope 9/10/12, occasion 3 у навыков и т.п.), покрываем синтетической мутацией полей `$data*` с обязательным откатом.
+- Один файл сценария = одна область; каждый сценарий финально проверяет, что свежие строки мод-лога не содержат `ERROR`.
+- Перед релизом мода — прогон `tools/e2e/run_suite.sh <префикс>` (весь сьют зелёный).
+
 ## Рецепты и грабли (проверено на живой игре)
 
-- **Скриптованный бой** (полный цикл для боевых модов): загрузить сейв → `BattleManager.setup(troopId, true, false); SceneManager.push(Scene_Battle)` → убить врагов → игра сама прогоняет победу, CE 27 и лут-цепочку. Рабочие примеры — `tools/e2e/scenarios/loot-toasts.mjs` и `loot-toasts-matrix.mjs`; общие помощники — `tools/e2e/lib.mjs` (`loadFixtureSave`, `runScriptedBattle`, `waitLootFlowStart/End`, `toastState`, `pollToasts`).
+- **Скриптованный бой** (полный цикл для боевых модов): загрузить сейв → `BattleManager.setup(troopId, true, false); SceneManager.push(Scene_Battle)` → убить врагов → игра сама прогоняет победу, CE 27 и лут-цепочку. Рабочие примеры — `tools/e2e/scenarios/loot-toasts.mjs` и `loot-toasts-matrix.mjs`; общие помощники — `tools/e2e/lib.mjs` (`loadFixtureSave`, `startBattle`/`finishBattle` (старт без убийства + добивка), `runScriptedBattle`, `waitLootFlowStart/End`, `toastState`, `pollToasts`, `waitEventDone`, `waitFreeControl`, `hudState`, `selectRowById`, `setSlots`, `pressDigit`/`pressCtrlDigit`, `logMark`/`freshLogLines`). Хотбар-мод покрыт пачкой `hotbar-*.mjs` (каталог кейсов: `docs/e2e-hotbar-testplan.md`).
+- **Боевая фаза ввода под VisuMZ**: `BattleManager._phase` остаётся `'turn'`, пока открыто окно команд — фаза `'input'` может не наступить. Ждать `BattleManager.isInputting() && BattleManager.actor()`. И не читать `inputtingAction()` без null-гварда: с одним актёром фаза уходит за кадр после `selectNextCommand`.
+- **Курсор в инвентаре/меню навыков программно**: игра через `DM_EasyWindowNavigation` деактивирует+деселектит `_itemWindow` каждый кадр, пока активно окно категорий (в живой игре его реактивирует наведение мыши). `selectRowById(t, id)` гасит sibling-окна (`_categoryWindow`, `_skillTypeWindow`, …), ставит курсор по id и активирует окно. Категорийные фильтры окна под CDP не переключаются: ключевых предметов (itype 2) и stype-0 навыков в `_data` нет — ветки отказов проверяются мутацией полей живой записи (`itypeId`/`stypeId`/`scope`/`occasion`) с откатом.
+- **Ctrl+клавиша**: `t.key(name, { ctrl: true })` (pressKey держит Control с CDP-модификатором 2 — DOM `ctrlKey` честный, keyMapper-переназначения его не подделывают). Синтетические `document.dispatchEvent(new KeyboardEvent('keydown', {keyCode: N}))` тоже работают для DOM-лисенеров (мод-логика нажатий цифр), но не для ванильного `Input`.
+- **Предметы с CE в эффектах всегда «применимы»**: `action.testApply` считает common-event эффекты (code 44) всегда валидными — еда с CE не откажет при полном HP. Для теста ветки «эффект не применится» временно обрезать `$dataItems[id].effects` до голого лечения (как HB-F-08/HB-H-06).
+- **Пиксельные проверки без скриншотов**: читаем `window.contents` / спрайт-`bitmap` напрямую — `getPixel(x,y)` возвращает строку `'#rrggbb'`, альфу отдельно `getAlphaPixel(x,y)` (число 0–255 в этом ядре). Детерминированно и не зависит от рендерера, в отличие от скриншотов в headless. Helpers `toastVisual`/`badgeInk`/`hudPixels` в lib.mjs; `readPx` внутри них. Грабли: тост ловим в начале fade-in (opacity не ассертим); у ячеек инвентаря есть штатный синий маркер в левом верхнем углу того же systemColor-семейства, что и бейдж — зону скана сужать до правого верхнего угла иконки; в HUD серость иконки мерить по верхней полосе (текст количества внизу рисуется с полной alpha).
 - **Детерминированный лут**: `Math.randomInt` подменяется заглушкой (`installRngStub`/`setRng` в lib.mjs) — событийные броски «Control Variables → Random» идут через неё. **Заглушку снимать только после КОНЦА лут-потока** (`waitLootFlowEnd`), а не после возврата на карту: броски трупа/кубика/тира происходят в CE 27 на карте, после боя. Снятие при `Scene_Map` давало флаки «то пусто, то батч».
 - **Лут-флоу стартует с задержкой**: CE 27 — зарезервированное событие (CGMZ_BattleResultEvents в `endBattle`: var 22 = troopId, var 23 = результат, reserve CE 27), запускается когда интерпретатор карты свободен. Перед проверками тостов ждать `waitLootFlowStart` + `waitLootFlowEnd`, иначе поймаем exp-only флаш без потока. Таблица лута выбирается по var 22 = **troop id** (не enemy id).
 - **Мульти-частовые боссы**: части с `stateResist(death)` не умирают от `setHp(0)+refresh()` — бой заканчивает внутренняя troop-механика, и `_rewards.exp` может отличаться от суммы по БД (expTotal считает только мёртвых на момент makeRewards). Для тестов брать одиночных врагов без резиста (напр. troop 13 «Mall Administrator», exp 200).
