@@ -53,7 +53,12 @@
  * battle-only VisuMZ BattleCore ActSeq_* plugin commands (e.g. Lesser
  * Mending's CE 291) operate on battler sprites that exist only in battle;
  * off-battle those commands are error-guarded and skipped so the rest of
- * the event (switches, sub-events, effects) completes normally.
+ * the event (switches, sub-events, effects) completes normally. On the
+ * hotkey path the battle flourish is additionally suppressed outright
+ * (ActSeq_* commands skipped without executing, interpreter Wait commands
+ * turned into no-ops while the hotbar-reserved CE runs) — otherwise the
+ * screen visibly reddens (IMPACT: Oversaturation) and controls lock for a
+ * second or two on every field heal. Vanilla menu usage is untouched.
  *
  * Bindings live on $gameSystem and persist through save/load.
  * No data files are edited. Disabling the mod restores vanilla behavior.
@@ -190,7 +195,7 @@
     // and is truncated once it grows past 1 MiB.
     // ==========================================================================
 
-    const MOD_VERSION = '1.0.2a.5';
+    const MOD_VERSION = '1.0.2a.6';
 
     const LOG_PATH = (() => {
         try {
@@ -650,6 +655,21 @@
             while ((i = ceQueue.indexOf(313)) >= 0) ceQueue.splice(i, 1);
             log('stripped CE 313 (Inv Open) from the reservation queue');
         }
+        // Battle-flourish neutralizer. Reserved CEs of field-usable skills
+        // (e.g. Lesser Mending's CE 291) are written for battle: they tint
+        // the screen (IMPACT: Oversaturation), run battle steps/animations
+        // and park the interpreter on Wait commands — off-battle that reads
+        // as the screen going red and the controls locking for a second or
+        // two. While a hotbar-reserved CE runs on the map, ActSeq_* commands
+        // are skipped without executing (see callCommand below) and Wait
+        // commands become no-ops (command230 alias), so the CE's real logic
+        // (switches, sub-events, effects) completes in a few frames. Vanilla
+        // menu usage is untouched: the guard arms only on the hotkey path.
+        if ($gameTemp.isCommonEventReserved()) {
+            hotbarCeGuard = true;
+            hotbarCeSeen = false;
+            hotbarCeGuardFrames = 3600; // safety net if the CE never runs
+        }
         showUseToast(obj);
         const left = DataManager.isItem(obj) ? `, left: ${$gameParty.numItems(obj)}` : '';
         logEvent(`used on map: ${obj.name} (#${obj.id})${left}`,
@@ -674,6 +694,15 @@
     // gab-id filter keeps unrelated gab windows alive even in that window.
     let suppressEquipGabs = 0;
 
+    // Hotbar-reserved common event guard: while a CE the hotbar reserved is
+    // running on the map interpreter, battle-only visuals (ActSeq_*) and
+    // Wait commands are neutralized. Arms in applyEntry, disarms in
+    // Scene_Map.update once the event run finishes (with a frame-count
+    // safety net in case the reserved CE never starts, e.g. scene change).
+    let hotbarCeGuard = false;
+    let hotbarCeSeen = false;
+    let hotbarCeGuardFrames = 0;
+
     const alias_PluginManager_callCommand = PluginManager.callCommand;
     PluginManager.callCommand = function (interpreter, pluginName, commandName, args) {
         if (suppressEquipGabs > 0 && pluginName === 'MK_GabWindows' &&
@@ -692,6 +721,14 @@
         if (pluginName === 'VisuMZ_1_BattleCore' &&
             typeof commandName === 'string' && commandName.startsWith('ActSeq_') &&
             !$gameParty.inBattle()) {
+            // Hotbar-reserved CE: skip outright — some of these commands do
+            // NOT throw off-battle but still produce their battle flourish
+            // (IMPACT: Oversaturation visibly reddens the map screen, battle
+            // steps wait on movement of sprites that do not exist).
+            if (hotbarCeGuard) {
+                logEvent(`off-battle ActSeq suppressed: ${commandName}`);
+                return true;
+            }
             try {
                 return alias_PluginManager_callCommand.call(this, interpreter, pluginName, commandName, args);
             } catch (e) {
@@ -700,6 +737,18 @@
             }
         }
         return alias_PluginManager_callCommand.call(this, interpreter, pluginName, commandName, args);
+    };
+
+    // Wait commands inside a hotbar-reserved CE exist to pace battle visuals
+    // we suppress — off-battle they just lock the player's controls. The
+    // guard is scoped to the hotkey path, so menu usage keeps vanilla pacing.
+    const alias_Game_Interpreter_command230 = Game_Interpreter.prototype.command230;
+    Game_Interpreter.prototype.command230 = function (params) {
+        if (hotbarCeGuard && !$gameParty.inBattle()) {
+            log('suppressed CE wait:', params && params[0]);
+            return true;
+        }
+        return alias_Game_Interpreter_command230.call(this, params);
     };
 
     function applyLoadout(index) {
@@ -749,6 +798,15 @@
         try {
             if (this._wteHotkeyHud) this._wteHotkeyHud.updateHud();
             if (suppressEquipGabs > 0) suppressEquipGabs--;
+            if (hotbarCeGuard) {
+                if ($gameMap.isEventRunning()) {
+                    hotbarCeSeen = true;
+                } else if (hotbarCeSeen || --hotbarCeGuardFrames <= 0) {
+                    hotbarCeGuard = false;
+                    hotbarCeSeen = false;
+                    log('CE guard released');
+                }
+            }
             if (!$gamePlayer.canMove()) return; // no hotkeys during messages/events
             if (rawCtrlHeld) {
                 for (let i = 0; i < SLOT_COUNT; i++) {

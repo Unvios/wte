@@ -2,6 +2,11 @@
 
 Versioning: `<game version>.<mod revision>`.
 
+## 1.0.2a.6
+
+- Using a skill whose common event carries battle visuals (e.g. Lesser Mending) no longer reddens the screen and no longer locks controls for a second or two: while a hotbar-reserved common event runs on the field, the VisuMZ BattleCore flourish commands are skipped outright and the event's Wait pacing is dropped, so the real logic (switches, sub-events, the heal itself) finishes in a few frames. Using the same skill from the vanilla menu is untouched.
+- These suppressions are written to the support log (`off-battle ActSeq suppressed: ...` lines), so remote diagnosis of "the screen still flashes" cases stays easy.
+
 ## 1.0.2a.5
 
 - The menu-only whitelist (`EXTRA_ITEM_IDS`) now covers much more than the Cup of Coffee: all sixteen buff potions (Angler's … Rest, Hazard, Blood, Taunting, Soulbargain, Night-Owl, Commerce, Debt, Refuse), the loot containers (coin pouches, gem bags, Treasure Casket, Goodie Bag), the three dice, Stealth Musk, Extra Pouch, Rain Gem, both Bait Packs, Lesser Rune of Growth and the Recall Potion. All of them can be bound and used from the field; battle stays off-limits, exactly like the vanilla menus.
