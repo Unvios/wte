@@ -11,6 +11,7 @@
 - [localization.md](localization.md) — Hendrix Localization: где словарь, как проходит перевод текста и как модам править строки на всех языках.
 - [e2e-testing.md](e2e-testing.md) — E2E-харнес (CDP поверх NW.js SDK): запуск, API тулкита, рецепты.
 - [e2e-hotbar-testplan.md](e2e-hotbar-testplan.md) — каталог e2e-кейсов мода WTE_QOL_Hotbar с раскладкой по сценариям.
+- [e2e-loot-toasts-testplan.md](e2e-loot-toasts-testplan.md) — каталог e2e-кейсов мода WTE_QOL_Loot_Toasts с раскладкой по сценариям.
 
 ## Базовые факты
 

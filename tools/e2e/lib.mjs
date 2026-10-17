@@ -154,7 +154,9 @@ export async function toastState(t) {
         opaque: w.opacity > 250 && w.contentsOpacity > 250,
         text: w._wteActiveToast ? w._wteActiveToast.lineOne : null,
         shrine: !!(w._wteActiveToast && w._wteActiveToast._wteShrine),
+        loot: !!(w._wteActiveToast && w._wteActiveToast._wteLootToast),
         face: w._wteActiveToast ? (w._wteActiveToast._wteSummaryFace || 0) : 0,
+        tints: w._frameSprite ? w._frameSprite.children.map(c => c.tint) : [],
         x: w.x, y: w.y, w: w.width, h: w.height,
       });
     }
@@ -182,6 +184,125 @@ export async function pollToasts(t, pred, timeoutMs = 15000, desc = 'toast condi
 export async function waitToastsGone(t, timeoutMs = 20000) {
   await pollToasts(t, (st) => st.queued.length === 0 && !st.slots.some(s => s.displaying),
     timeoutMs, 'all toasts faded');
+}
+
+// --- No-click battles + busy watchers (loot-toasts) --------------------------
+// The clicky helpers above press enter on any busy message, which would mask a
+// regression in "no blocking windows" cases. These variants never press keys.
+
+const LOOT_FLOW_ACTIVE = `(() => {
+  const ce27 = $dataCommonEvents[27];
+  if (!ce27 || !ce27.list || typeof $gameMap === 'undefined' || !$gameMap) return false;
+  for (let i = $gameMap._interpreter; i; i = i._childInterpreter) {
+    if (i._list === ce27.list) return true;
+  }
+  return false;
+})()`;
+
+// Starts a battle and watches the intro. Every message window that appears is
+// RECORDED (its text) and then dismissed with enter — the vanilla battle
+// tutorial still fires in the fixture save and must be clickable, while an
+// announcement text would prove a suppression regression even when dismissed.
+// Returns { messages, phase, timeout } — messages = raw joined 401 lines.
+export async function startBattleWatch(t, troopId) {
+  await t.waitFor(`SceneManager._scene?.constructor.name === 'Scene_Map' &&
+    !$gameMap._interpreter.isRunning() && !$gameMessage.isBusy() &&
+    (!$gameTemp.isCommonEventReserved || !$gameTemp.isCommonEventReserved())`,
+    { timeout: 30000, desc: 'map idle before battle' });
+  await t.eval(`BattleManager.setup(${troopId}, true, false); SceneManager.push(Scene_Battle); 'ok'`);
+  const deadline = Date.now() + 60000;
+  const messages = [];
+  let phase = 'none';
+  while (Date.now() < deadline) {
+    if (await t.eval(`$gameMessage.isBusy()`)) {
+      const text = await t.eval(`$gameMessage._texts.join(' ')`);
+      if (text.trim()) messages.push(text.trim());
+      await t.key('enter');
+      await t.sleep(200);
+      continue;
+    }
+    phase = await t.eval(`SceneManager._scene?.constructor.name === 'Scene_Battle' ? BattleManager._phase : 'none'`);
+    if (phase === 'input' || phase === 'turn') {
+      // Grace window: a late announcement must still be caught.
+      let late = false;
+      for (let i = 0; i < 12; i++) {
+        if (await t.eval(`$gameMessage.isBusy()`)) { late = true; break; }
+        await t.sleep(100);
+      }
+      if (!late) return { messages, phase };
+    }
+    await t.sleep(100);
+  }
+  return { messages, phase, timeout: true };
+}
+
+// Kills all enemies and rides the victory flow back to the map WITHOUT
+// pressing enter. A blocking victory message would stall the flow and is
+// recorded in busySeen (and usually prevents reaching the map at all).
+export async function finishBattleNoClick(t) {
+  await t.eval(`$gameTroop.members().forEach(e => { e.setHp(0); e.refresh(); }); 'ok'`);
+  await t.eval(`BattleManager.checkBattleEnd(); 'ok'`);
+  const deadline = Date.now() + 60000;
+  let busySeen = false;
+  while (Date.now() < deadline) {
+    if (await t.eval(`$gameMessage.isBusy()`)) busySeen = true;
+    if (await t.eval(`SceneManager._scene?.constructor.name === 'Scene_Map'`)) return { busySeen, onMap: true };
+    if (await t.eval(`SceneManager._scene?.constructor.name === 'Scene_Battle' && $gameTroop.isAllDead() && BattleManager._phase !== 'battleEnd'`)) {
+      await t.eval(`BattleManager.checkBattleEnd(); 'ok'`);
+    }
+    await t.sleep(100);
+  }
+  return { busySeen, onMap: false };
+}
+
+// Watches the whole CE 27 loot flow without pressing keys; records any busy
+// message window. Completion = reservation consumed AND interpreter idle —
+// waiting for the ACTIVE state is flaky: with all waits suppressed the whole
+// chain can start and finish between two polls. If nothing is pending for the
+// first 8 s, we assume the flow already finished before we started watching.
+export async function watchLootFlow(t, timeoutMs = 40000) {
+  let busySeen = false;
+  let sawFlow = false;
+  let sawPending = false;
+  const deadline = Date.now() + timeoutMs;
+  const startGraceUntil = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    if (await t.eval(`$gameMessage.isBusy()`)) busySeen = true;
+    const st = await t.eval(`(() => ({
+      active: ${LOOT_FLOW_ACTIVE},
+      reserved: !!($gameTemp.isCommonEventReserved && $gameTemp.isCommonEventReserved()),
+      running: $gameMap._interpreter.isRunning(),
+    }))()`);
+    if (st.active) sawFlow = true;
+    if (st.active || st.reserved || st.running) sawPending = true;
+    if (sawPending && !st.active && !st.reserved && !st.running) {
+      return { busySeen, sawFlow, done: true, endedAt: Date.now() };
+    }
+    if (!sawPending && Date.now() > startGraceUntil) {
+      return { busySeen, sawFlow, done: true, endedAt: Date.now(), missed: true };
+    }
+    await t.sleep(100);
+  }
+  return { busySeen, sawFlow, done: false, endedAt: null, timeout: true };
+}
+
+// Deterministic loot modifiers: area counters and dice bonuses off. State 233
+// ("Taunting Potion") is +25 to the CE 2703 corpse roll and would both skew
+// exact die faces and reroute the loot-table branches (var2>=7 jumps over the
+// var2>=6 special drop), so it is removed from the party leader as well.
+export async function resetLootModifiers(t) {
+  await t.eval(`$gameVariables.setValue(1670, 0); $gameVariables.setValue(1671, 0);
+    $gameVariables.setValue(1672, 0); $gameVariables.setValue(136, 0);
+    $gameSwitches.setValue(37, false);
+    $gameActors.actor(1).removeState(233); 'ok'`);
+}
+
+// Enqueue a synthetic toast (queue/purge tests): loot markers optional.
+export async function enqueueTestToast(t, text, { loot = false, shrine = false, displayTime = 180 } = {}) {
+  await t.eval(`$cgmzTemp.createNewToast({ isText: true, lineOne: ${JSON.stringify(text)},
+    lineOneColor: 0, lineOneAlignment: 'left', lineTwo: '',
+    displayTime: ${displayTime}, width: 380,
+    _wteLootToast: ${loot}, _wteShrine: ${shrine}, _wteSummaryFace: 0 }); 'ok'`);
 }
 
 // Reads new lines of the mod's log since `offset`; returns { text, size }.
@@ -370,6 +491,40 @@ export async function toastVisual(t, needle) {
         inkRatio: ink / total, colorful, whitish, nameColor,
         gw: Graphics.width, gh: Graphics.height,
       };
+    }
+    return { found: false };
+  })()`);
+}
+
+// Ink inside the die-face zone of the currently displaying summary toast
+// (face > 0). The mod draws the dN picture at x=2 as a square of
+// contents.height-6 side, text shifted right of it. Returns row coverage as
+// well: the picture spans nearly the full contents height, while plain text
+// (no picture, e.g. after a mutation) only inks a middle band.
+export async function summaryDieInk(t) {
+  return t.eval(`(() => {
+    ${PX_READER}
+    const scene = SceneManager._scene;
+    if (!scene) return { found: false };
+    for (let i = 1; i <= 10; i++) {
+      const w = scene['_cgmz_toastWindow' + i];
+      if (!w || !w.isDisplaying || !w.isDisplaying()) continue;
+      const face = w._wteActiveToast ? (w._wteActiveToast._wteSummaryFace || 0) : 0;
+      if (!face) continue;
+      const bmp = w.contents;
+      if (!bmp || !bmp.width) return { found: true, error: 'no contents bitmap' };
+      const size = Math.max(16, bmp.height - 6);
+      let ink = 0;
+      const rows = new Set();
+      for (let y = 0; y < bmp.height; y++) {
+        for (let x = 2; x < 2 + size && x < bmp.width; x++) {
+          const p = readPx(bmp, x, y);
+          if (p.a < 60 || p.r + p.g + p.b < 90) continue;
+          ink++;
+          rows.add(y);
+        }
+      }
+      return { found: true, face, size, ink, rows: rows.size };
     }
     return { found: false };
   })()`);

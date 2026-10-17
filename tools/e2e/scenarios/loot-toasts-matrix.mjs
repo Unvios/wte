@@ -21,8 +21,9 @@
 // Run: node tools/e2e/run.mjs tools/e2e/scenarios/loot-toasts-matrix.mjs --sandbox [--headless]
 
 import {
-  waitTitle, loadFixtureSave, installRngStub, setRng,
-  runScriptedBattle, toastState, pollToasts, waitToastsGone, waitLootFlowStart, waitLootFlowEnd,
+  waitTitle, loadFixtureSave, installRngStub, setRng, resetLootModifiers,
+  runScriptedBattle, startBattle, finishBattleNoClick, watchLootFlow,
+  toastState, pollToasts, waitToastsGone, summaryDieInk,
 } from '../lib.mjs';
 
 const SAVE_SLOT = Number(process.env.WTE_SLOT || 90);
@@ -83,6 +84,7 @@ export default async function lootToastsMatrix(t) {
   await waitTitle(t);
   await loadFixtureSave(t, SAVE_SLOT);
   await installRngStub(t);
+  await resetLootModifiers(t);
   await t.sleep(1000);
 
   const expectedExp = await t.eval(`(() => {
@@ -95,8 +97,8 @@ export default async function lootToastsMatrix(t) {
   t.log('case A: boss battle at home, rng=0');
   await setRng(t, 0);
   await runScriptedBattle(t, TROOP_ID);
-  await waitLootFlowStart(t);
-  await waitLootFlowEnd(t);
+  const flowA = await watchLootFlow(t);
+  t.assert(flowA.done, 'case A: loot flow drained');
   await setRng(t, null);
 
   const settledA = await settleBatch(t, 'case A');
@@ -110,12 +112,36 @@ export default async function lootToastsMatrix(t) {
 
   const summaryA = dispA.find(w => w.face > 0);
   t.assert(!!summaryA, 'case A: summary toast with die face exists');
-  t.assert(summaryA.face >= 1 && summaryA.face <= 6,
-    `case A: die face in 1..6 (got ${summaryA.face})`);
+  // rng=0 -> corpse var2 = 1, die var2 = 1, var906 = 1 -> no luck bonus: face 1.
+  t.assert(summaryA.face === 1, `LT-SUM-01: die face === 1 (got ${summaryA.face})`);
   if (expectedExp > 0) {
     t.assert(EXP_RE.test(summaryA.text) && summaryA.text.includes(String(expectedExp)),
       `case A: summary has EXP part ${expectedExp} ("${summaryA.text}")`);
   }
+  // LT-SUM-01: the gold part lives in the SAME summary toast.
+  const goldMatch = (summaryA.text || '').match(/\\i\[314\]\\c\[14\](\d+)/);
+  t.assert(!!goldMatch && Number(goldMatch[1]) > 0,
+    `LT-SUM-01: summary has a gold part ("${summaryA.text}")`);
+  t.log(`LT-SUM-01: face=1, exp=${expectedExp}, gold=${goldMatch ? goldMatch[1] : 'none'}`);
+  // LT-VIS-01: the d1 picture is actually drawn in the summary's left zone —
+  // ink spanning most rows of the zone (plain text would only ink a mid band).
+  const dieA = await summaryDieInk(t);
+  t.assert(dieA.found && dieA.face === 1, 'LT-VIS-01: summary window found for the die check');
+  t.assert(dieA.ink > 400 && dieA.rows >= 22,
+    `LT-VIS-01: die face picture drawn (ink=${dieA.ink}, rows=${dieA.rows}/${dieA.size}; text-only would be ~311/18)`);
+  const itemsA = dispA.filter(w => !w.face);
+  // LT-ITEM-01: every other toast is an item toast, no "Obtained" wording.
+  t.assert(itemsA.every(w => (w.text || '').includes('ii[') || (w.text || '').includes('\\i[')),
+    'LT-ITEM-01: non-summary toasts carry icon escapes');
+  t.assert(dispA.every(w => !(w.text || '').includes('Obtained')),
+    'LT-ITEM-01: no "Obtained" wording anywhere');
+  // LT-ITEM-03: gold never leaks into a standalone toast outside the summary.
+  t.assert(itemsA.every(w => !/i\[314\]/.test(w.text || '')),
+    'LT-ITEM-03: no standalone gold toast');
+  // LT-ITEM-02: at least one item toast with the xN suffix (count > 1).
+  const xnA = itemsA.map(w => (w.text || '').match(/ x(\d+)$/)).filter(Boolean);
+  t.assert(xnA.length >= 1 && xnA.some(m => Number(m[1]) > 1),
+    `LT-ITEM-02: at least one " xN" toast with N > 1 (${JSON.stringify(itemsA.map(w => w.text))})`);
   const topY = Math.min(...dispA.map(w => w.y));
   t.assert(summaryA.y === topY, 'case A: summary toast is on top of the stack');
   for (let i = 1; i < dispA.length; i++) {
@@ -142,8 +168,8 @@ export default async function lootToastsMatrix(t) {
   })()`);
   await setRng(t, 0);
   await runScriptedBattle(t, TROOP_ID);
-  await waitLootFlowStart(t);
-  await waitLootFlowEnd(t);
+  const flowB = await watchLootFlow(t);
+  t.assert(flowB.done, 'case B: loot flow drained');
   await setRng(t, null);
   await t.eval(`BattleManager.makeRewards = window.__origMakeRewards; 'ok'`);
 
@@ -154,6 +180,8 @@ export default async function lootToastsMatrix(t) {
   t.assert(summaryB.face >= 1 && summaryB.face <= 6,
     `case B: die face in 1..6 (got ${summaryB.face})`);
   t.assert(!EXP_RE.test(summaryB.text || ''), `case B: summary has NO EXP part ("${summaryB.text}")`);
+  t.assert(/i\[314\]/.test(summaryB.text || ''),
+    `LT-SUM-02: summary keeps the gold part when EXP is 0 ("${summaryB.text}")`);
   await t.shot('case-b');
   await waitToastsGone(t);
 
@@ -175,9 +203,12 @@ export default async function lootToastsMatrix(t) {
   await t.sleep(1500);
 
   await setRng(t, 1);
-  await runScriptedBattle(t, TROOP_ID);
-  await waitLootFlowStart(t);
-  await waitLootFlowEnd(t);
+  await startBattle(t, TROOP_ID);
+  const finC = await finishBattleNoClick(t);
+  t.assert(finC.onMap && !finC.busySeen, 'case C: victory without windows');
+  const flowC = await watchLootFlow(t);
+  t.assert(flowC.done, 'case C: loot flow drained');
+  t.assert(!flowC.busySeen, 'LT-SHRINE-03: no shrine announcement window');
   await setRng(t, null);
 
   const settledC = await settleBatch(t, 'case C');
@@ -197,9 +228,39 @@ export default async function lootToastsMatrix(t) {
     t.assert(s.y >= maxPlainY, `case C: shrine toast below plain items (y=${s.y} vs plain bottom ${maxPlainY})`);
   }
   t.assert(dispC.length <= 7, `case C: at most 7 windows displaying (got ${dispC.length})`);
+  t.assert(dispC.every(w => !/combat shrine/i.test(w.text || '')),
+    'LT-SHRINE-03: no shrine announcement text in any toast');
+  // LT-SHRINE-02: gold frame tint on shrine toasts, white on the rest.
+  for (const w of dispC) {
+    const expectedTint = w.shrine ? 0xFFD700 : 0xFFFFFF;
+    t.assert(w.tints.length > 0 && w.tints.every(tint => tint === expectedTint),
+      `LT-SHRINE-02: slot ${w.slot} ${w.shrine ? 'gold' : 'white'} frame (got ${JSON.stringify(w.tints)})`);
+  }
   await t.shot('case-c');
   const shownC = await countAllShown(t, 'case C');
   const batchC = dispC.length + settledC.queued.length;
   t.assert(shownC === batchC, `case C: all ${batchC} toasts shown (saw ${shownC})`);
+  await waitToastsGone(t);
+
+  // ------------------------------------------------------------- case D
+  // Tint reset: the same windows reused by a NON-shrine batch must be white.
+  t.log('case D: non-shrine batch after the shrine one — tint reset');
+  await t.eval(`$gameVariables.setValue(1672, 0); 'ok'`);
+  await setRng(t, 0);
+  await startBattle(t, TROOP_ID);
+  const finD = await finishBattleNoClick(t);
+  t.assert(finD.onMap, 'case D: battle finished');
+  const flowD = await watchLootFlow(t);
+  t.assert(flowD.done, 'case D: loot flow drained');
+  await setRng(t, null);
+  const settledD = await settleBatch(t, 'case D');
+  const dispD = settledD.slots.filter(x => x.displaying);
+  t.assert(dispD.length > 0 && dispD.every(w => !w.shrine),
+    'case D: no shrine flags with the counter at 0');
+  for (const w of dispD) {
+    t.assert(w.tints.length > 0 && w.tints.every(tint => tint === 0xFFFFFF),
+      `LT-SHRINE-02: slot ${w.slot} tint reset to white (got ${JSON.stringify(w.tints)})`);
+  }
+  await t.shot('case-d');
   await waitToastsGone(t);
 }

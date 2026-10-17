@@ -164,6 +164,11 @@ export default async function lootToasts(t) {
   }
   t.log(`visible loot toasts: ${JSON.stringify(toasts)}`);
   t.assert(toasts.length > 0, 'at least one loot toast on screen');
+  // LT-SUM-04: troop 5 has no loot table in CE 27 -> a single EXP-only summary.
+  t.assert(toasts.length === 1, `LT-SUM-04: exactly one toast (got ${toasts.length})`);
+  t.assert(toasts[0].face === 0, `LT-SUM-04: no die face (got ${toasts[0].face})`);
+  t.assert(/ОП|EXP/i.test(toasts[0].text) && toasts[0].text.includes('4'),
+    `LT-SUM-04: EXP-only summary "4 EXP" ("${toasts[0].text}")`);
 
   // Programmatic visual checks (no pixels): geometry, visibility, overlap.
   const geom = await t.eval(`(() => {
