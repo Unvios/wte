@@ -14,7 +14,7 @@ Everything outside battles (chests, quests, dialogue, fishing, shrines) stays 10
 
 ## Requirements
 
-- Welcome to Elderfield (the mod targets game version 1.0.2a; see the mod version `1.0.2a.x` for the exact revision).
+- Welcome to Elderfield 1.0.4d (mod version `1.0.4d.1`). Older entries in the changelog document compatibility with earlier game versions.
 - The game's official mod loader enabled in `js/plugins.js` — see Install step 2, it ships turned off and updates reset it.
 - Game updates wipe the `mods/` folder — just re-drop the mod afterwards.
 
@@ -42,7 +42,8 @@ All settings live in the `CONFIG` object at the top of `js/plugins/loot_toasts.j
 | `VICTORY_EXP_TOAST` | `true` | fold "Victory!/N EXP" into the summary toast |
 | `BATTLE_WIN_CE_ID` | `27` | id of the "Battle Win" common event |
 | `DICE_ANIMATION_CE_ID` | `28` | id of the die roll animation event (skipped entirely) |
-| `DICE_FACE_CE_IDS` | `[29–34]` | ids of the die face 1–6 events (their empty pause marks the roll) |
+| `DICE_FACE_CE_IDS` | `[29–34]` | ids of the die face 1–6 events used by the legacy loot flow |
+| `ROLL_VARIABLE_ID` | `2` | final roll variable in the new loot flow (the game's open command can override it) |
 | `SUPPRESSED_PICTURES` | `[5, 11, 12]` | loot flow picture numbers that are never shown |
 | `SUPPRESSED_TEXTS` | 3 lines | corpse state texts — never shown |
 | `SHRINE_REWARD_TEXT` | `'The combat shrine rewards you...'` | flag line for combat shrine bonus loot |
@@ -56,6 +57,7 @@ The mod always writes to `mods/WTE_QOL_Loot_Toasts/logs/loot_toasts.log` (the fo
 ## Compatibility notes
 
 - Works with any game language — toast text is rebuilt from the item database, so item names stay localized.
+- Supports both loot implementations: legacy `Show Text` messages and the newer `WTE_LootRollScene` queue. The dedicated loot scene is skipped, and its queued drops are routed into the same non-blocking toast batch.
 - If a game update renumbers the internal "Battle Win" event (id 27), the mod detects nothing and silently stays vanilla (set `BATTLE_WIN_CE_ID`).
 - Battle drops from the enemy database ("You find N gold." lines) are shown as regular toasts.
 

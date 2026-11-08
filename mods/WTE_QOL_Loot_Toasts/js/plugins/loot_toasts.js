@@ -6,12 +6,13 @@
  * @help
  * After every battle, common event 27 ("Battle Win") checks whether the corpse
  * is intact, rolls the die and hands out loot through ~40 loot table common
- * events. Every step blocks player input with message windows: corpse text, a
- * hidden pause on the die face, then one window per obtained item.
+ * events. Depending on the game version/settings, the result is presented via
+ * blocking message windows or the dedicated WTE_LootRollScene, which waits for
+ * input after showing the roll and loot.
  *
- * This plugin converts that event chain into CGMZ toasts (right side of the
+ * This plugin converts either event chain into CGMZ toasts (right side of the
  * screen, stacked upward from the bottom like the game's own toasts,
- * auto-fade), so control returns immediately after the roll. What you see:
+ * auto-fade), so control returns without any clicks. What you see:
  *   - item drops:   icon + localized item name (+ xN when more than one);
  *   - summary toast on top of the stack: the rolled die face picture (official
  *                   d1-d6 art), earned EXP and gold in one line, e.g.
@@ -21,10 +22,9 @@
  * The "Victory!" window is skipped too.
  * The "Obtained …" wording is dropped in every language — the strings are
  * rebuilt from the game data instead of being reworded, so localization comes
- * from the item database for free. The corpse state texts, the battle start
- * announcements ("A Rat appears!") and the die roll animation (CE 28:
- * tumbling d1-d6 pictures with frame waits that freeze the player) are all
- * skipped entirely.
+ * from the item database for free. The corpse state texts/toasts, the battle
+ * start announcements ("A Rat appears!"), the legacy die roll animation and
+ * the dedicated loot-roll scene are all skipped entirely.
  *
  * No data files are edited. Disabling the mod restores 100% vanilla behavior.
  */
@@ -36,6 +36,7 @@
         BATTLE_WIN_CE_ID: 27,                       // reserved after each battle (CGMZ_BattleResultEvents)
         DICE_ANIMATION_CE_ID: 28,                   // "Dice Roll Effect": tumbling d1-d6 on pictures 9/10 + frame waits
         DICE_FACE_CE_IDS: [29, 30, 31, 32, 33, 34], // "Dice Result 1..6"; their empty pause message marks the roll
+        ROLL_VARIABLE_ID: 2,                        // WTE_LootRollScene default; its open command can override this
         SUPPRESSED_PICTURES: [5, 11, 12],           // Obj_DEATHLOOT icon, final die face, luck banner
         SUPPRESSED_TEXTS: [                         // corpse state texts — no toast, no window
             'The corpse is still relatively intact.',
@@ -60,12 +61,17 @@
     const RAW_ITEM_XN = 'Obtained \\C[6]\\ii[\\V[30]] \\C[0]x\\V[31]';
     const RAW_ITEM = 'Obtained \\C[6]\\ii[\\V[30]]';
     const RAW_GOLD = 'Obtained \\i[314]\\c[14]\\v[1039]\\c[0]!';
+    const RAW_QUEUE_ITEM_XN = '\\C[6]\\ii[\\V[30]] \\C[0]x\\V[31]';
+    const RAW_QUEUE_ITEM = '\\C[6]\\ii[\\V[30]]';
+    const RAW_QUEUE_WEAPON = '\\C[6]\\wi[\\V[30]]';
+    const RAW_QUEUE_ARMOR = '\\C[6]\\ai[\\V[30]]';
+    const RAW_QUEUE_GOLD = '\\i[314]\\c[14]\\v[1039]\\c[0]';
 
     // Support logging: everything goes to logs/ inside the mod folder (kept
     // out of git by the mod's own .gitignore). Info lines are always written;
     // logDebug adds detail when DEBUG is on. The file is restarted once it
     // grows past LOG_MAX_BYTES. Timestamps make remote debugging possible.
-    const MOD_VERSION = '1.0.2a.2';
+    const MOD_VERSION = '1.0.4d.1';
 
     const LOG_PATH = (() => {
         try {
@@ -396,6 +402,55 @@
         }
         return null;
     }
+
+    function queuedDropToastText(raw) {
+        if (raw === RAW_QUEUE_ITEM_XN) return dropToastText(RAW_ITEM_XN);
+        if (raw === RAW_QUEUE_ITEM) return dropToastText(RAW_ITEM);
+        if (raw === RAW_QUEUE_GOLD) return dropToastText(RAW_GOLD);
+        if (raw === RAW_QUEUE_WEAPON || raw === RAW_QUEUE_ARMOR) {
+            const id = $gameVariables.value(30);
+            const count = $gameVariables.value(31);
+            const db = raw === RAW_QUEUE_WEAPON ? $dataWeapons : $dataArmors;
+            const data = db && db[id];
+            if (!data) return null;
+            return {
+                kind: 'item',
+                text: `\\i[${data.iconIndex}]\\c[14]${localize(data.name)}\\c[0]` +
+                    (count > 1 ? ` x${count}` : ''),
+            };
+        }
+        return null;
+    }
+
+    const alias_Game_Interpreter_command357 = Game_Interpreter.prototype.command357;
+    Game_Interpreter.prototype.command357 = function (params) {
+        if (!isLootFlow()) return alias_Game_Interpreter_command357.call(this, params);
+        const pluginName = params[0];
+        const commandName = params[1];
+        const args = params[3] || {};
+        if (pluginName === 'WTE_LootRollScene') {
+            if (commandName === 'queueLootMessage') {
+                const raw = args.text || '';
+                const rebuilt = queuedDropToastText(raw);
+                bufferLootToast(rebuilt !== null ? rebuilt.kind : 'plain',
+                    rebuilt !== null ? rebuilt.text : raw,
+                    rebuilt !== null ? rebuilt.amount : undefined);
+                logDebug('queued loot:', raw);
+                return true;
+            }
+            if (commandName === 'openLootScene') {
+                const variableId = Number(args.rollVariableId) || CONFIG.ROLL_VARIABLE_ID;
+                rollFace = Math.max(1, Math.min(6, Number($gameVariables.value(variableId)) || 1));
+                logDebug(`dedicated loot scene skipped; roll=${rollFace} from var ${variableId}`);
+                return true;
+            }
+        }
+        if (pluginName === 'CGMZ_ToastManager' && commandName === 'Create Text Toast' &&
+            CONFIG.SUPPRESSED_TEXTS.indexOf(args.lineOne) !== -1) {
+            return true;
+        }
+        return alias_Game_Interpreter_command357.call(this, params);
+    };
 
     // ==========================================================================
     // Interception: messages inside the loot flow are buffered as batch

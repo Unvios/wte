@@ -1,0 +1,40 @@
+SHORT DESCRIPTION (Nexus "Summary" field):
+Skips the post-battle click-fest and shows the die result, EXP, gold and loot in non-blocking toasts.
+
+FULL DESCRIPTION (Nexus "Description" field, BBCode):
+[color=#f6b26b][size=4][b]Description[/b][/size][/color]
+[color=#D4D4D8]Tired of clicking through every item after a fight? Loot Toasts replaces the post-battle message sequence with a compact stack of notifications. Control returns immediately: no die animation to watch, no item windows to dismiss and no separate loot scene to close. Version 1.0.4d.1 supports both the overhauled loot sequence in game version 1.0.4d and the legacy flow.[/color]
+
+[b][color=#f6b26b][size=4]Main features[/size][/color][/b]
+[list]
+[*][color=#D4D4D8]One summary toast shows the actual rolled die face, earned EXP and gold. Missing parts are omitted.[/color][/*]
+[*][color=#D4D4D8]Each item gets a toast with its icon, localized name and stack count, without the repeated "Obtained" wording.[/color][/*]
+[*][color=#D4D4D8]Combat shrine rewards have gold-tinted frames and are grouped below regular drops.[/color][/*]
+[*][color=#D4D4D8]Up to seven toasts can be visible. A new battle clears the previous battle's loot notifications so only fresh results remain.[/color][/*]
+[*][color=#D4D4D8]Battle-start announcements, corpse messages, the Victory window and the blocking die presentation are skipped.[/color][/*]
+[*][color=#D4D4D8]Everything outside the post-battle flow remains vanilla: world pickups, quests, dialogue, fishing and regular shrines.[/color][/*]
+[*][color=#D4D4D8]No game data files are edited. Disable the mod to restore the original behavior.[/color][/*]
+[/list]
+
+[b][color=#f6b26b][size=4]Requirements[/size][/color][/b]
+[color=#D4D4D8]Welcome to Elderfield 1.0.4d and the game's official mod loader. No other mods are required.[/color]
+
+[b][color=#f6b26b][size=4]Installation instructions[/size][/color][/b]
+[list=1]
+[*][color=#D4D4D8]Extract the archive into your game folder. The archive already contains a [font=Courier New]mods[/font] folder, so [font=Courier New]WTE_QOL_Loot_Toasts[/font] should end up inside [font=Courier New]<game>\mods\[/font].[/color][/*]
+[*][color=#D4D4D8]Enable the mod loader (once per game install): open [font=Courier New]<game>\js\plugins.js[/font] in any text editor, find [font=Courier New]"name":"VirtualModLoader","status":false[/font] and change [font=Courier New]false[/font] to [font=Courier New]true[/font]. Save the file.[/color][/*]
+[*][color=#D4D4D8]Launch the game. The loader rebuilds its injector and reloads once on first run.[/color][/*]
+[/list]
+[quote][color=#D4D4D8]Game updates and Steam's "verify integrity of game files" can restore [font=Courier New]js\plugins.js[/font] and wipe the [font=Courier New]mods\[/font] folder. After an update, re-drop the mod and enable the loader again if needed.[/color][/quote]
+
+[b][color=#f6b26b][size=4]Uninstall[/size][/color][/b]
+[color=#D4D4D8]Delete [font=Courier New]mods\WTE_QOL_Loot_Toasts[/font], or rename it to [font=Courier New]!WTE_QOL_Loot_Toasts[/font] to temporarily disable the mod.[/color]
+
+[b][color=#f6b26b][size=4]Configuration[/size][/color][/b]
+[color=#D4D4D8]Settings live in the [font=Courier New]CONFIG[/font] object at the top of [font=Courier New]js\plugins\loot_toasts.js[/font]: toast duration and width, right margin, slot count, shrine frame color and battle-flow options. The defaults are ready to use; no configuration is required.[/color]
+
+[b][color=#f6b26b][size=4]Troubleshooting[/size][/color][/b]
+[color=#D4D4D8]The mod always writes [font=Courier New]mods\WTE_QOL_Loot_Toasts\logs\loot_toasts.log[/font]. Attach this file to bug reports: it records the mod version, loot batches, shrine events and unexpected errors.[/color]
+
+[b][color=#f6b26b][size=4]Credits[/size][/color][/b]
+[color=#D4D4D8]Made by Unvios.[/color]
