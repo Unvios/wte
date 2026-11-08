@@ -195,7 +195,7 @@
     // and is truncated once it grows past 1 MiB.
     // ==========================================================================
 
-    const MOD_VERSION = '1.0.2a.6';
+    const MOD_VERSION = '1.0.4d.1';
 
     const LOG_PATH = (() => {
         try {

@@ -15,16 +15,16 @@ Everything the mod cannot legally do, it refuses with a buzzer instead — exact
 
 ## Requirements
 
-- Welcome to Elderfield (the mod targets game version 1.0.2a; see the mod version `1.0.2a.x` for the exact revision).
-- The game's official mod loader enabled in `js/plugins.js` — see Install step 2, it ships turned off and updates reset it.
+- Welcome to Elderfield (the mod targets game version 1.0.4d; see the mod version `1.0.4d.x` for the exact revision).
+- The game's official mod support (built in since 1.0.4d — the mod is managed from **Options → Mods**, no manual `js/plugins.js` edit).
 - The Ctrl+digit loadout keys use the game's built-in equipment loadout feature; if a game update ever removes it, those keys simply buzz.
-- Game updates wipe the `mods/` folder — just re-drop the mod afterwards.
+- Game updates can wipe the `mods/` folder — just re-drop the mod afterwards.
 
 ## Install
 
-1. Copy the `WTE_QOL_Hotbar` folder into `<game>/mods/`.
-2. Enable the mod loader (once per game install): open `<game>/js/plugins.js` in any text editor, find `"name":"VirtualModLoader","status":false"` and change `false` to `true`. Save the file. (Game updates and Steam's "verify integrity of game files" restore the original file — flip it back after each update.)
-3. Launch the game — the mod loader rebuilds its injector and reloads once.
+1. Extract the archive into the game folder so that `WTE_QOL_Hotbar` ends up inside `<game>/mods/`.
+2. Launch the game and open **Options → Mods** from the main menu. `WTE QOL Hotbar` should be listed with game version `1.0.4d` and mod version `1.0.4d.1`. No manual `js/plugins.js` edit is required.
+3. On first run, the loader may rebuild its injector and reload the game once — this is normal.
 
 To disable, rename the folder with a `!` prefix: `!WTE_QOL_Hotbar`.
 

@@ -2,8 +2,10 @@
 
 Versioning: `<game version>.<mod revision>`.
 
-## 1.0.2a.6
+## 1.0.4d.1
 
+- Verified against game update 1.0.4d (full automated test suite passes on the new build; item/skill ids and the equipment-loadout integration are unchanged).
+- Supports the game's official mod menu: the mod now ships `gameversion`/`modversion`/`languages` metadata, so it is listed under **Options → Mods** with its versions. No manual `js/plugins.js` edit is needed anymore.
 - Using a skill whose common event carries battle visuals (e.g. Lesser Mending) no longer reddens the screen and no longer locks controls for a second or two: while a hotbar-reserved common event runs on the field, the VisuMZ BattleCore flourish commands are skipped outright and the event's Wait pacing is dropped, so the real logic (switches, sub-events, the heal itself) finishes in a few frames. Using the same skill from the vanilla menu is untouched.
 - These suppressions are written to the support log (`off-battle ActSeq suppressed: ...` lines), so remote diagnosis of "the screen still flashes" cases stays easy.
 
