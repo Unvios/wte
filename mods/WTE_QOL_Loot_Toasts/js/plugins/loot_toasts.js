@@ -71,7 +71,7 @@
     // out of git by the mod's own .gitignore). Info lines are always written;
     // logDebug adds detail when DEBUG is on. The file is restarted once it
     // grows past LOG_MAX_BYTES. Timestamps make remote debugging possible.
-    const MOD_VERSION = '1.0.4d.1';
+    const MOD_VERSION = '1.0.4d.2';
 
     const LOG_PATH = (() => {
         try {

@@ -2,6 +2,11 @@
 
 Versioning: `<game version>.<mod revision>`.
 
+## 1.0.4d.2
+
+- Added full metadata for the official Mods menu: the mod now displays its supported game version, mod version and language support instead of an unknown game version.
+- Installation now uses the built-in Mods menu for verification; no manual `js/plugins.js` edit is needed on the current game version.
+
 ## 1.0.4d.1
 
 - Updated for the overhauled post-battle loot sequence in Welcome to Elderfield 1.0.4d. Both the new dedicated loot-roll scene and the legacy message-based flow are supported.
