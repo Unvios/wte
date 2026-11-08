@@ -1,14 +1,12 @@
-// Loot Toasts E2E — special drop via direct command128 (LT-SPEC-01).
+// Loot Toasts E2E — special armor through the new queue path (LT-SPEC-01).
 // Setup: switch 247 = OFF (MZ event semantics: command111/121 use 0 = ON,
 // 1 = OFF; the drop branch requires the unique to be NOT looted yet = OFF),
 // troop 8 (Rat v2, table CE 551), rng=5.
 // Traced live: CE 35 rolls var2 = 6, then CE 138 adds +2 -> var2 = 8, so the
-// "var2 >= 7" special branch fires (face is still 6: any var2 >= 6 -> CE 34).
-// That branch drops armor 152 "Cloak of Darkness" via a direct command128 and
-// marks switch 247 = ON. (The var2>=6 "Spiked Bat" branch is jumped over by
-// design of the loot table, so the armor is the deterministic target here.)
-// The mod must rebuild that toast from the tracked drop (lastDrop), not from
-// the raw "Obtained ..." string: \i[<icon>] + localized name, no \ii[.
+// "var2 >= 7" special branch fires (the displayed face is still clamped to 6).
+// That branch calls CE 14 for armor 152 "Cloak of Darkness" and marks switch
+// 247 = ON. CE 14 queues \C[6]\ai[\V[30]] via WTE_LootRollScene; the mod must
+// rebuild it from the armor database: \i[<icon>] + localized name, no \ii[.
 // Run: tools/e2e/run.sh tools/e2e/scenarios/loot-toasts-special.mjs --sandbox --headless
 
 import path from 'node:path';

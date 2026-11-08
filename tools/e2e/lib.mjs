@@ -246,44 +246,52 @@ export async function finishBattleNoClick(t) {
   let busySeen = false;
   while (Date.now() < deadline) {
     if (await t.eval(`$gameMessage.isBusy()`)) busySeen = true;
-    if (await t.eval(`SceneManager._scene?.constructor.name === 'Scene_Map'`)) return { busySeen, onMap: true };
+    if (await t.eval(`SceneManager._scene?.constructor.name === 'Scene_Map'`)) {
+      const exp = await t.eval(`BattleManager._rewards ? BattleManager._rewards.exp : 0`);
+      return { busySeen, onMap: true, exp };
+    }
     if (await t.eval(`SceneManager._scene?.constructor.name === 'Scene_Battle' && $gameTroop.isAllDead() && BattleManager._phase !== 'battleEnd'`)) {
       await t.eval(`BattleManager.checkBattleEnd(); 'ok'`);
     }
     await t.sleep(100);
   }
-  return { busySeen, onMap: false };
+  return { busySeen, onMap: false, exp: 0 };
 }
 
 // Watches the whole CE 27 loot flow without pressing keys; records any busy
-// message window. Completion = reservation consumed AND interpreter idle —
-// waiting for the ACTIVE state is flaky: with all waits suppressed the whole
-// chain can start and finish between two polls. If nothing is pending for the
-// first 8 s, we assume the flow already finished before we started watching.
+// message window or opening of the game's dedicated loot-roll scene.
+// Completion = reservation consumed AND interpreter idle — waiting for the
+// ACTIVE state is flaky: with all waits suppressed the whole chain can start
+// and finish between two polls. If nothing is pending for the first 500 ms,
+// the flow already finished before we started watching; waiting longer would
+// miss the mod's three-second toast batch on the new accelerated game flow.
 export async function watchLootFlow(t, timeoutMs = 40000) {
   let busySeen = false;
+  let rollSceneSeen = false;
   let sawFlow = false;
   let sawPending = false;
   const deadline = Date.now() + timeoutMs;
-  const startGraceUntil = Date.now() + 8000;
+  const startGraceUntil = Date.now() + 500;
   while (Date.now() < deadline) {
     if (await t.eval(`$gameMessage.isBusy()`)) busySeen = true;
     const st = await t.eval(`(() => ({
       active: ${LOOT_FLOW_ACTIVE},
       reserved: !!($gameTemp.isCommonEventReserved && $gameTemp.isCommonEventReserved()),
       running: $gameMap._interpreter.isRunning(),
+      rollScene: SceneManager._scene?.constructor.name === 'Scene_WTE_LootRoll',
     }))()`);
+    if (st.rollScene) rollSceneSeen = true;
     if (st.active) sawFlow = true;
     if (st.active || st.reserved || st.running) sawPending = true;
     if (sawPending && !st.active && !st.reserved && !st.running) {
-      return { busySeen, sawFlow, done: true, endedAt: Date.now() };
+      return { busySeen, rollSceneSeen, sawFlow, done: true, endedAt: Date.now() };
     }
     if (!sawPending && Date.now() > startGraceUntil) {
-      return { busySeen, sawFlow, done: true, endedAt: Date.now(), missed: true };
+      return { busySeen, rollSceneSeen, sawFlow, done: true, endedAt: Date.now(), missed: true };
     }
     await t.sleep(100);
   }
-  return { busySeen, sawFlow, done: false, endedAt: null, timeout: true };
+  return { busySeen, rollSceneSeen, sawFlow, done: false, endedAt: null, timeout: true };
 }
 
 // Deterministic loot modifiers: area counters and dice bonuses off. State 233

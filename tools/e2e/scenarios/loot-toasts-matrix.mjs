@@ -1,18 +1,17 @@
 // Loot Toasts matrix E2E — deterministic REAL battles with a controlled RNG.
 // Math.randomInt is stubbed only around the victory flow, so the whole chain
-// (battle -> CE 27 -> loot table CE 569 -> die roll CE 36 -> messages -> mod)
+// (battle -> CE 27 -> loot table -> die roll CE 36 -> queue/messages -> mod)
 // runs for real; the stub just pins the random operands (corpse roll,
 // die face source, loot tier, bonus rolls).
 //
-//   Case A (home map, troop 53, rng=0): boss bundle — summary toast on top
-//     with the rolled die face and the EXP total from the enemy DB, item
-//     toasts with icon escapes, no overlaps, full drain of the batch.
+//   Case A (home map, troop 13, rng=0): boss bundle — summary toast on top
+//     with the rolled die face and actual battle EXP, item toasts with icon
+//     escapes, no overlaps, full drain of the batch.
 //   Case B (same, rewards.exp forced to 0): summary keeps the die face and
 //     has no EXP part.
-//   Case C (mall map, uniques switches reset, rng=0): bundle + one-time
-//     uniques + shrine bonus = batch bigger than the 7 toast slots —
-//     asserts the 7-window cap, the queued remainder and that every toast
-//     gets screen time (open-count based, immune to duplicate texts).
+//   Case C (mall map, shrine counter enabled, rng=1): bundle + shrine bonus,
+//     gold/white frame tints and full drain of the batch.
+//   Case D (shrine counter disabled): reused toast windows reset to white.
 //
 // Assertions read in-page state only (toast windows/queue). The mod's log
 // file is shared with a live game through the sandbox junction and is NOT
@@ -22,12 +21,12 @@
 
 import {
   waitTitle, loadFixtureSave, installRngStub, setRng, resetLootModifiers,
-  runScriptedBattle, startBattle, finishBattleNoClick, watchLootFlow,
+  startBattle, finishBattleNoClick, watchLootFlow,
   toastState, pollToasts, waitToastsGone, summaryDieInk,
 } from '../lib.mjs';
 
 const SAVE_SLOT = Number(process.env.WTE_SLOT || 90);
-const TROOP_ID = Number(process.env.WTE_TROOP || 13); // "Mall Administrator" — single enemy 9, exp 200
+const TROOP_ID = Number(process.env.WTE_TROOP || 13); // "Mall Administrator" — single enemy 9, table CE 554
 const MALL_MAP_ID = 3;
 
 const EXP_RE = /ОП|EXP/i;
@@ -87,16 +86,20 @@ export default async function lootToastsMatrix(t) {
   await resetLootModifiers(t);
   await t.sleep(1000);
 
-  const expectedExp = await t.eval(`(() => {
+  const databaseExp = await t.eval(`(() => {
     const troop = $dataTroops[${TROOP_ID}];
     return troop.members.reduce((sum, m) => sum + ($dataEnemies[m.enemyId]?.exp || 0), 0);
   })()`);
-  t.log(`troop ${TROOP_ID} expected EXP: ${expectedExp}`);
+  t.log(`troop ${TROOP_ID} database EXP: ${databaseExp}`);
 
   // ------------------------------------------------------------- case A
   t.log('case A: boss battle at home, rng=0');
   await setRng(t, 0);
-  await runScriptedBattle(t, TROOP_ID);
+  await startBattle(t, TROOP_ID);
+  const finA = await finishBattleNoClick(t);
+  t.assert(finA.onMap && !finA.busySeen, 'case A: victory without windows');
+  const expectedExp = finA.exp;
+  t.log(`troop ${TROOP_ID} actual EXP reward: ${expectedExp}`);
   const flowA = await watchLootFlow(t);
   t.assert(flowA.done, 'case A: loot flow drained');
   await setRng(t, null);
@@ -167,7 +170,9 @@ export default async function lootToastsMatrix(t) {
     return 'ok';
   })()`);
   await setRng(t, 0);
-  await runScriptedBattle(t, TROOP_ID);
+  await startBattle(t, TROOP_ID);
+  const finB = await finishBattleNoClick(t);
+  t.assert(finB.onMap && !finB.busySeen, 'case B: victory without windows');
   const flowB = await watchLootFlow(t);
   t.assert(flowB.done, 'case B: loot flow drained');
   await setRng(t, null);

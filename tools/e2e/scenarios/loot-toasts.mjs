@@ -115,9 +115,13 @@ export default async function lootToasts(t) {
   // back on the map (with the mod, victory windows are skipped entirely).
   const mapDeadline = Date.now() + 60000;
   let onMap = false;
+  let actualExp = 0;
   while (Date.now() < mapDeadline) {
     onMap = await t.eval(`SceneManager._scene?.constructor.name === 'Scene_Map'`);
-    if (onMap) break;
+    if (onMap) {
+      actualExp = await t.eval(`BattleManager._rewards ? BattleManager._rewards.exp : 0`);
+      break;
+    }
     if (await t.eval(`$gameMessage.isBusy()`)) await t.key('enter');
     if (await t.eval(`SceneManager._scene?.constructor.name === 'Scene_Battle' && $gameTroop.isAllDead() && BattleManager._phase !== 'battleEnd'`)) {
       await t.eval(`BattleManager.checkBattleEnd(); 'ok'`);
@@ -164,11 +168,15 @@ export default async function lootToasts(t) {
   }
   t.log(`visible loot toasts: ${JSON.stringify(toasts)}`);
   t.assert(toasts.length > 0, 'at least one loot toast on screen');
-  // LT-SUM-04: troop 5 has no loot table in CE 27 -> a single EXP-only summary.
+  // LT-SUM-04: troop 5 has no loot table -> one EXP-only toast, no items/gold.
+  // The new game scene can still request a clamped die face on the intact branch.
   t.assert(toasts.length === 1, `LT-SUM-04: exactly one toast (got ${toasts.length})`);
-  t.assert(toasts[0].face === 0, `LT-SUM-04: no die face (got ${toasts[0].face})`);
-  t.assert(/ОП|EXP/i.test(toasts[0].text) && toasts[0].text.includes('4'),
-    `LT-SUM-04: EXP-only summary "4 EXP" ("${toasts[0].text}")`);
+  t.assert(Number.isInteger(toasts[0].face) && toasts[0].face >= 0 && toasts[0].face <= 6,
+    `LT-SUM-04: optional die face is in 0..6 (got ${toasts[0].face})`);
+  t.assert(actualExp > 0 && /ОП|EXP/i.test(toasts[0].text) && toasts[0].text.includes(String(actualExp)),
+    `LT-SUM-04: EXP-only summary with actual reward ${actualExp} ("${toasts[0].text}")`);
+  t.assert(!/i\[314\]|ii\[/.test(toasts[0].text),
+    `LT-SUM-04: no gold or item content ("${toasts[0].text}")`);
 
   // Programmatic visual checks (no pixels): geometry, visibility, overlap.
   const geom = await t.eval(`(() => {

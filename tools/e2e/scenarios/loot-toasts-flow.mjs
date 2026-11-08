@@ -5,8 +5,8 @@
 //   Case 1: troop 13, rng=0  -> intact corpse, full loot flow, no busy ever,
 //           free control within 2 s after the flow ends.
 //   Case 2: troop 13, rng=99 -> corpse roll var2 = 100 > 50 = mangled: no loot
-//           table, no die roll. Exactly one loot toast: EXP-only summary
-//           (face=0, "200 EXP", no gold, no item toasts).
+//           table, no die roll. Exactly one loot toast: EXP-only summary with
+//           the game's actual reward (face=0, no gold, no item toasts).
 // Run: tools/e2e/run.sh tools/e2e/scenarios/loot-toasts-flow.mjs --sandbox --headless
 
 import path from 'node:path';
@@ -17,7 +17,7 @@ import {
 } from '../lib.mjs';
 
 const SAVE_SLOT = Number(process.env.WTE_SLOT || 90);
-const TROOP_ID = 13; // Mall Administrator, exp 200, table CE 554
+const TROOP_ID = 13; // Mall Administrator, table CE 554; actual EXP is read after victory
 const EXP_RE = /ОП|EXP/i;
 
 export default async function lootToastsFlow(t) {
@@ -39,7 +39,8 @@ export default async function lootToastsFlow(t) {
     const flow = await watchLootFlow(t);
     t.assert(flow.done, `${id}: loot flow started and ended`);
     t.assert(!flow.busySeen, `${id}: no corpse/die-pause message window (LT-FLOW-01)`);
-    return flow;
+    t.assert(!flow.rollSceneSeen, `${id}: dedicated loot-roll scene skipped (LT-FLOW-03)`);
+    return { ...flow, exp: fin.exp };
   }
 
   // ------------------------------------------------- case 1: intact corpse
@@ -54,7 +55,7 @@ export default async function lootToastsFlow(t) {
   await waitToastsGone(t);
 
   // ------------------------------------------------ case 2: mangled corpse
-  await flowCase('LT-FLOW-01 (mangled)', 99);
+  const flow2 = await flowCase('LT-FLOW-01 (mangled)', 99);
   const st = await pollToasts(t, s => s.slots.some(x => x.displaying && x.loot),
     15000, 'LT-SUM-03: EXP-only summary visible');
   const loot = st.slots.filter(x => x.displaying && x.loot);
@@ -63,10 +64,13 @@ export default async function lootToastsFlow(t) {
     `LT-SUM-03: exactly one loot toast (got ${loot.length} + ${queuedLoot.length} queued)`);
   const summary = loot[0];
   t.assert(summary.face === 0, `LT-SUM-03: no die face (got ${summary.face})`);
-  t.assert(EXP_RE.test(summary.text || '') && summary.text.includes('200'),
-    `LT-SUM-03: summary is "200 EXP" ("${summary.text}")`);
+  t.assert(flow2.exp > 0 && EXP_RE.test(summary.text || '') && summary.text.includes(String(flow2.exp)),
+    `LT-SUM-03: summary contains the game's actual EXP reward ${flow2.exp} ("${summary.text}")`);
   t.assert(!/i\[314\]/.test(summary.text || ''), `LT-SUM-03: no gold part ("${summary.text}")`);
   t.assert(!summary.text.includes('ii['), 'LT-SUM-03: no item content in the summary');
+  const everyToast = [...st.slots, ...st.queued].map(x => x.text || '').join(' ');
+  t.assert(!/corpse was too mangled/i.test(everyToast),
+    'LT-FLOW-03: vanilla mangled-corpse toast suppressed');
   t.log(`LT-SUM-03: mangled corpse -> EXP-only toast "${summary.text}"`);
   await t.shot('sum-03-mangled');
   await setRng(t, null);
