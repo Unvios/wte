@@ -89,6 +89,10 @@
 - **LT-FLOW-02** (реализовано): время до свободного управления разумное: от конца лут-потока до `$gamePlayer.canMove()` < 2 с (страж против возврата wait-цепочек кубика).
 - **LT-FLOW-03** (реализовано): `watchLootFlow` отслеживает `Scene_WTE_LootRoll` и возвращает `rollSceneSeen`; в обоих прогонах отдельная сцена не должна открыться. В mangled-ветке среди всех игровых и лут-тостов не должно быть «The corpse was too mangled…» — новый системный CGMZ-тост тоже подавлен.
 
+### UI — официальное меню модов (P0)
+
+- **LT-UI-01** (реализовано, `loot-toasts-mod-manager.mjs`): с титула выбрать Options через нативный `processOk` титульного окна (MOG_TitleCommands принимает подтверждение только мышью/касанием), затем категорию Mods. Проверить `VirtualModLoader.hasMod('WTE_QOL_Loot_Toasts')`, открыть штатную `Scene_ModList` (проверка через `instanceof`: класс анонимный, `constructor.name` не подходит), выбрать Loot Toasts и проверить карточку: имя, автор, `gameversion=1.0.4d`, `modversion=1.0.4d.2`, `languages=All game languages`, отсутствие `Unknown`. Если другой установленный мод занимает Options → Mods своими настройками, официальная сцена открывается напрямую после подтверждения категории — это задокументированное внешнее ограничение, а не путь Loot Toasts.
+
 ### VIS — визуал (P1, bitmap-чтение, headless-safe)
 
 - **LT-VIS-01** (реализовано, matrix A, `summaryDieInk` в lib.mjs): у сводного тоста с `face>0` в левом квадрате contents (сторона = `contents.height-6`, x=2) чернила грани кубика: `ink > 400` и покрытие `rows >= 22` из 30. Пороги сняты с живого батча (норма ink=570/rows=26; голый текст без картинки — ink=311/rows=18, ловится мутацией M12).
@@ -115,6 +119,7 @@
 | `loot-toasts-special.mjs` | LT-SPEC-01 | реализовано |
 | `loot-toasts-queue.mjs` | LT-ORD-02/03, LT-PURGE-01 | реализовано |
 | `loot-toasts-regression.mjs` | LT-REG-01/02, LT-LOG-01 | реализовано |
+| `loot-toasts-mod-manager.mjs` | LT-UI-01 | реализовано |
 
 ## Доработки харнеса (реализовано)
 
@@ -143,6 +148,7 @@
 | LT-FLOW-03 | пропустить `openLootScene` в ванильный алиас; не подавлять CGMZ-тост трупа |
 | LT-SUM-01 / LT-ITEM-01 | пропустить `queueLootMessage` в ванильную очередь вместо `lootBatch` |
 | LT-SUM-01 | не читать var2 на `openLootScene` (`rollFace = 0`) |
+| LT-UI-01 | подменить `gameversion` в `mod.json` на `broken` |
 
 Журнал (все мутации внесены в `loot_toasts.js`, сценарий покраснел на целевом кейсе, баг откачен; дата 2026-10-17):
 
@@ -165,6 +171,7 @@
 - **LT-FLOW-03, труп** — отключено только подавление CGMZ-тоста «The corpse was too mangled…». Результат: FLOW-01/02 и SUM-03 зелёные, FAIL именно `LT-FLOW-03: vanilla mangled-corpse toast suppressed`. Откачено.
 - **LT-SUM-01 / LT-ITEM-01, очередь** — `queueLootMessage` отправлен в ванильную очередь вместо батча. Результат: батч сократился до одного тоста `213 EXP`, FAIL `LT-SUM-01: summary has a gold part`; предметы и золото не попали к моду. Откачено.
 - **LT-SUM-01, грань** — на `openLootScene` установлено `rollFace = 0`. Результат: шесть тостов с правильными предметами/ОП/золотом, но ни одного с гранью, FAIL `case A: summary toast with die face exists`. Откачено.
+- **LT-UI-01** — в `mod.json` установлено `gameversion: "broken"`. Результат: сценарий дошёл до карточки мода и упал именно на `LT-UI-01: gameversion === "1.0.4d" (got "broken")`; остальные поля прошли. Откачено, зелёный повтор подтверждён.
 
 ## Не автоматизируем
 

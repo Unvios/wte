@@ -30,7 +30,7 @@
     // <game>/mods/WTE_QOL_Template/logs/ and is truncated past 1 MiB.
     // ==========================================================================
 
-    const MOD_VERSION = '1.0.2a.1'; // must match mod.json — release_mod.sh checks
+    const MOD_VERSION = '1.0.4d.1'; // must match version/modversion in mod.json
 
     const LOG_PATH = (() => {
         try {

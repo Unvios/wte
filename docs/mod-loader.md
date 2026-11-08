@@ -1,12 +1,12 @@
 # WTE Mod Loader
 
-Исходники: `js/plugins/VirtualModLoader.js` (351 строка, весь лоадер) и `js/plugins/ModLoader_Injector.js` (генерируемый файл-инжектор). Оба стоят в `js/plugins.js`: VirtualModLoader — вверху списка, инжектор — в самом низу.
+Исходники: `js/plugins/VirtualModLoader.js` (загрузчик), `js/plugins/VirtualModLoader_UI.js` (официальное меню модов) и `js/plugins/ModLoader_Injector.js` (генерируемый файл-инжектор). Загрузчик стоит вверху `js/plugins.js`, инжектор — в самом низу. В актуальной игре они включены разработчиком, ручная правка `js/plugins.js` не нужна.
 
 ## Структура мода
 
 ```
 mods/MyMod/
-  mod.json            ← {"name","author","version","description","priority"}
+  mod.json            ← {"name","author","gameversion","modversion","languages","version","description","priority"}
   js/plugins/*.js     ← плагины, автоинъекция
   data/*.json         ← splice-файлы (modded*) и полные оверрайды
   img/**, audio/**    ← замена/добавление ресурсов
@@ -14,6 +14,7 @@ mods/MyMod/
 
 - Папки с `!` в начале имени пропускаются.
 - `priority` (default 0): **ассеты** ищутся от большего приоритета к меньшему (первый найденный wins), **плагины и сплайсы** применяются от меньшего к большему (последняя запись побеждает).
+- Официальный пункт «Настройки → Mods» открывает `Scene_ModList` и читает `gameversion`, `modversion`, `languages`, `description` и `priority` из `mod.json`. Старое `version` используется как fallback и нужно нашему релизному скрипту; держим его равным `modversion`. Меню показывает уже распакованные в `mods/` моды и не устанавливает архивы само.
 
 ## Как инжектятся плагины
 

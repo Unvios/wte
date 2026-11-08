@@ -11,15 +11,14 @@ The mod edits no game files: disable it and the game is completely original agai
 
 ## Requirements
 
-- Welcome to Elderfield (the mod targets game version 1.0.2a; see the mod version `1.0.2a.x` for the exact revision).
-- The game's official mod loader enabled in `js/plugins.js` — see Install step 2, it ships turned off and updates reset it.
-- Game updates wipe the `mods/` folder — just re-drop the mod afterwards.
+- Welcome to Elderfield 1.0.4d with the official Mods menu (mod revision `1.0.4d.1`).
+- Game updates can wipe the `mods/` folder — just re-drop the mod afterwards.
 
 ## Install
 
-1. Copy the `WTE_QOL_Template` folder into `<game>/mods/`.
-2. Enable the mod loader (once per game install): open `<game>/js/plugins.js` in any text editor, find `"name":"VirtualModLoader","status":false"` and change `false` to `true`. Save the file. (Game updates and Steam's "verify integrity of game files" restore the original file — flip it back after each update.)
-3. Launch the game — the mod loader rebuilds its injector and reloads once.
+1. Extract the archive into the game folder so that `WTE_QOL_Template` ends up inside `<game>/mods/`.
+2. Launch the game and open **Options → Mods** from the main menu. Check that the mod is listed with the correct game and mod versions. No manual `js/plugins.js` edit is required.
+3. On first run, the loader may rebuild its injector and reload the game once.
 
 To disable, rename the folder with a `!` prefix: `!WTE_QOL_Template`.
 
